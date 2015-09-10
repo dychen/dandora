@@ -42,6 +42,19 @@ var TopNav = React.createClass({
 });
 
 var SideNav = React.createClass({
+  getInitialState: function() {
+    return {
+      play: true
+    };
+  },
+  play: function() {
+    var mediaPlayer = document.getElementById('pndra-audio-player');
+    if (this.state.play === true)
+      mediaPlayer.play();
+    else
+      mediaPlayer.pause();
+    this.setState({ play: !this.state.play });
+  },
   render: function() {
     var style = {
       height: '100%',
@@ -79,6 +92,7 @@ var SideNav = React.createClass({
       width: 100,
       backgroundColor: 'white'
     };
+    var playIcon = this.state.play ? 'play' : 'pause';
     return (
       <div style={style}>
         <div style={inputStyle}>
@@ -87,10 +101,13 @@ var SideNav = React.createClass({
             placeholder='Create Station'
             addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
         </div>
+        <audio id='pndra-audio-player'>
+          <source src='../media/Rachmaninov-Piano-Concerto-2-Op-18-C-minor-1-Moderato.mp3' type='audio/mpeg' />
+        </audio>
         <div style={buttonRowStyle}>
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-up' />
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-down' />
-          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='play' />
+          <ReactBootstrap.Glyphicon style={buttonStyle} onClick={this.play} glyph={playIcon} />
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='fast-forward' />
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='volume-up' />
           <ReactBootstrap.ProgressBar active now={60} />
