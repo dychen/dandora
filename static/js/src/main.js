@@ -42,19 +42,6 @@ var TopNav = React.createClass({
 });
 
 var SideNav = React.createClass({
-  getInitialState: function() {
-    return {
-      play: true
-    };
-  },
-  play: function() {
-    var mediaPlayer = document.getElementById('pndra-audio-player');
-    if (this.state.play === true)
-      mediaPlayer.play();
-    else
-      mediaPlayer.pause();
-    this.setState({ play: !this.state.play });
-  },
   render: function() {
     var style = {
       height: '100%',
@@ -68,18 +55,6 @@ var SideNav = React.createClass({
     var inputStyle = {
       width: 250
     };
-    var buttonRowStyle = {
-      display: 'flex',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-around',
-      width: 250
-    };
-    var buttonStyle = {
-      color: 'white',
-      fontSize: '2.4em',
-      margin: 'auto'
-    };
     var songInfoStyle = {
       color: 'white',
       display: 'flex',
@@ -92,7 +67,6 @@ var SideNav = React.createClass({
       width: 100,
       backgroundColor: 'white'
     };
-    var playIcon = this.state.play ? 'play' : 'pause';
     return (
       <div style={style}>
         <div style={inputStyle}>
@@ -101,25 +75,100 @@ var SideNav = React.createClass({
             placeholder='Create Station'
             addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
         </div>
-        <audio id='pndra-audio-player'>
+
+        <AudioPlayer />
+
+        <div style={songInfoStyle}>
+          <div style={albumImgStyle}></div>
+          <div>Piano Concerto No. 2 in C Minor</div>
+          <div>Unknown</div>
+          <div>Unknown</div>
+        </div>
+      </div>
+    );
+  }
+});
+
+var AudioPlayer = React.createClass({
+  getInitialState: function() {
+    return {
+      playing: true,
+      currentTime: 0,
+      duration: 0
+    };
+  },
+  componentDidMount: function() {
+    // Might be buggy to set this up here. Need to ensure that all dependencies
+    // access this.mediaPlayer after this function finishes.
+    this.mediaPlayer = document.getElementById('pndra-audio-player');
+    this.mediaPlayer.addEventListener('timeupdate', this.handleTimeUpdate);
+  },
+  componentWillUnmount: function() {
+    this.mediaPlayer.removeEventListener('timeupdate', this.handleTimeUpdate);
+  },
+  handleTimeUpdate: function() {
+    this.setState({
+      currentTime: this.mediaPlayer.currentTime,
+      duration: this.mediaPlayer.duration
+    });
+  },
+  play: function() {
+    if (this.state.playing === true)
+      this.mediaPlayer.pause();
+    else
+      this.mediaPlayer.play();
+    this.setState({ playing: !this.state.playing });
+  },
+  getProgress: function() {
+    return this.state.currentTime / this.state.duration * 100;
+  },
+  formatTime: function(seconds) {
+    var sTotal = Math.round(seconds);
+    var s = sTotal % 60;
+    if (s < 10)
+      s = '0' + s;
+    var mTotal = Math.floor(sTotal / 60);
+    var m = mTotal % 60;
+    var h = Math.floor(mTotal / 60);
+    if (h > 0) {
+      return h + ':' + m + ':' + s;
+    }
+    return m + ':' + s;
+  },
+  render: function() {
+    var buttonRowStyle = {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-around',
+      width: 250
+    };
+    var buttonStyle = {
+      color: 'white',
+      fontSize: '2.4em',
+      margin: 'auto'
+    };
+    var progressBarStyle = {
+      width: 250
+    };
+    var playIcon = this.state.playing ? 'pause' : 'play';
+    return (
+      <div>
+        <audio id='pndra-audio-player' autoPlay>
           <source src='../media/Rachmaninov-Piano-Concerto-2-Op-18-C-minor-1-Moderato.mp3' type='audio/mpeg' />
         </audio>
+
+        {this.formatTime(this.state.currentTime)}/{this.formatTime(this.state.duration)}
+        <ReactBootstrap.ProgressBar style={progressBarStyle} active now={this.getProgress()} />
         <div style={buttonRowStyle}>
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-up' />
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-down' />
           <ReactBootstrap.Glyphicon style={buttonStyle} onClick={this.play} glyph={playIcon} />
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='fast-forward' />
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='volume-up' />
-          <ReactBootstrap.ProgressBar active now={60} />
-        </div>
-        <div style={songInfoStyle}>
-          <div style={albumImgStyle}></div>
-          <div>Party Up (Up In Here)</div>
-          <div>DMX</div>
-          <div>And Then There Was X (Explicit)</div>
         </div>
       </div>
-    );
+    )
   }
 });
 
