@@ -2,3 +2,7 @@
 *.pyc
 venv*
 static/js/dist
+data
+*.pem
+setup.sh
+*.db
