@@ -21,6 +21,9 @@ Flask
 + MarkupSafe
 + Werkzeug
 + wheel
+
+flask-sqlalchemy
++ SQLAlchemy
 ```
 
 ###Old/Unused

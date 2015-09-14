@@ -4,8 +4,7 @@ from recommend import Timer
 
 ROOT_DIR = os.environ['ROOT_DIR']
 
-def evaluate(filename='submission.txt'):
-    TAU = 500
+def evaluate(filename='submission.txt', TAU=500):
 
     def calculate_mAP(predictions, actuals):
         """

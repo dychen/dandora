@@ -15,6 +15,7 @@ class PopularityRecommender(BaseRecommender):
     """
     Strategy: Sort songs by popularity and recommend the same top-k songs to
     each user in descending order, filtered by what they've already heard.
+    This is the baseline recommender used described in the original paper.
     """
 
     def __compute_song_popularity(self, data):
