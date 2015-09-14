@@ -1,13 +1,15 @@
 import os
 import time
 
-class BaseRecommender:
-    _ROOT_DIR = os.environ['ROOT_DIR']
-
-    def _log_elapsed_time(self, s, prev_time):
+class Timer:
+    @classmethod
+    def log_elapsed_time(cls, s, prev_time):
         curr_time = time.time()
         print '[Elapsed time] %s: %f' % (s, curr_time - prev_time)
         return curr_time
+
+class BaseRecommender:
+    _ROOT_DIR = os.environ['ROOT_DIR']
 
 class PopularityRecommender(BaseRecommender):
     """
@@ -62,6 +64,7 @@ class PopularityRecommender(BaseRecommender):
 
     def __get_song_idx_map(self):
         """
+        UNUSED
         @return [dict]: Dict of song ids mapped to song indexes for submission
             { [song id]: [song idx] }, e.g. { 'SOAAADD12AB018A9DD': '1', ...}
         """
@@ -72,10 +75,12 @@ class PopularityRecommender(BaseRecommender):
         return song_idx_map
 
     def __format_submission(self, recommendations_list, user_listened,
-                            ordered_users, song_idx_map,
-                            filename='submissions.txt'):
+                            ordered_users, filename='submission.txt'):
         """
         See corresponding method for each parameter
+        Output:
+            '[user id], [song id], [song id], ..., [song id]'
+            ...
         """
         with open('%s/data/submissions/%s' % (self._ROOT_DIR, filename),
                   'w') as f:
@@ -85,8 +90,8 @@ class PopularityRecommender(BaseRecommender):
                     if len(user_recommendations) == 500:
                         break
                     if song not in user_listened[user]:
-                        user_recommendations.append(song_idx_map[song])
-                f.write('%s\n' % ','.join(user_recommendations))
+                        user_recommendations.append(song)
+                f.write('%s\n' % ','.join([user] + user_recommendations))
 
     def run(self):
         t0 = time.time()
@@ -94,27 +99,30 @@ class PopularityRecommender(BaseRecommender):
         with open('%s/data/train/kaggle_visible_evaluation_triplets.txt'
                   % self._ROOT_DIR) as f:
             data = f.readlines()
-        t1 = self._log_elapsed_time('Reading files', t0)
+        t1 = Timer.log_elapsed_time('Reading files', t0)
 
         popular_songs = self.__compute_song_popularity(data)
         #print popular_songs[:100]
-        t2 = self._log_elapsed_time('Computing song popularity', t1)
+        t2 = Timer.log_elapsed_time('Computing song popularity', t1)
 
         user_listened = self.__get_user_listened_dict(data)
         #print user_listened['d7083f5e1d50c264277d624340edaaf3dc16095b']
-        t3 = self._log_elapsed_time('Getting songs users already heard', t2)
+        t3 = Timer.log_elapsed_time('Getting songs users already heard', t2)
 
         ordered_users = self.__get_ordered_users()
         #print ordered_users[:2]
-        t4 = self._log_elapsed_time('Getting the canonical ordering of users',
+        t4 = Timer.log_elapsed_time('Getting the canonical ordering of users',
                                     t3)
+
+        # This is unnecessary for my custom evaluation script
+        """
         song_idx_map = self.__get_song_idx_map()
         #print song_idx_map['SOSOUKN12A8C13AB79']
-        t5 = self._log_elapsed_time('Getting song index mapping', t4)
+        t5 = Timer.log_elapsed_time('Getting song index mapping', t4)
+        """
 
-        self.__format_submission(popular_songs, user_listened, ordered_users,
-                                 song_idx_map)
-        t6 = self._log_elapsed_time('Writing submission', t5)
+        self.__format_submission(popular_songs, user_listened, ordered_users)
+        t4 = Timer.log_elapsed_time('Writing submission', t3)
 
 if __name__=='__main__':
     PopularityRecommender().run()
