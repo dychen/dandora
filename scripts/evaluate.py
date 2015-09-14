@@ -5,7 +5,7 @@ from recommend import Timer
 ROOT_DIR = os.environ['ROOT_DIR']
 
 def evaluate(filename='submission.txt'):
-    K_CONST = 500
+    TAU = 500
 
     def calculate_mAP(predictions, actuals):
         """
@@ -30,27 +30,39 @@ def evaluate(filename='submission.txt'):
                     user_listened[user] = set([song])
             return user_listened
 
+        """
+        OLD IMPLEMENTATION; UNUSED (Asymptotically slower)
+
         def calculate_precision_at_k(user, user_songs_k, listened_map, k):
             # Calculate precision-at-k, the proportion of correct
             # recommendations within the top-k of the predicted ranking
-            count = 0
-            #count = sum([1 for song in user_songs_k if song in listened_map[user]])
-            for song in user_songs_k[:k-1]:
-                if song in listened_map[user]:
-                    count += 1
-            return count / float(k)
+            return len([1 for song in user_songs_k
+                        if song in listened_map[user]]) / float(k)
 
         def calculate_average_precision(user, user_songs, listened_map):
             # Calculate average precision, the proportion of correct
-            # recommendations from k=1 to K_CONST
+            # recommendations from k=1 to @TAU
             precision_at_ks = []
-            n_u = min(K_CONST, len(listened_map[user]))
-            for k in range(1, K_CONST+1):
+            n_u = min(TAU, len(listened_map[user]))
+            for k in range(1, TAU+1):
                 if user_songs[k-1] in listened_map[user]:
-                    p_k = calculate_precision_at_k(user, user_songs[:k-1],
+                    p_k = calculate_precision_at_k(user, user_songs[:k],
                                                    listened_map, k)
                     precision_at_ks.append(p_k)
             return sum(precision_at_ks) / n_u
+        """
+
+        def calculate_average_precision(user, user_songs, listened_map):
+            # Calculate average precision, the proportion of correct
+            # recommendations from k=1 to @TAU
+            n_u = min(TAU, len(listened_map[user]))
+            num_matches = 0.0
+            average_precision = 0.0
+            for k in range(1, TAU+1):
+                if user_songs[k-1] in listened_map[user]:
+                    num_matches += 1.0
+                    average_precision += num_matches / k # Precision at k
+            return average_precision / n_u
 
         print 'Evaluating test data'
         print '    Loading listened map'
@@ -76,11 +88,12 @@ def evaluate(filename='submission.txt'):
     with open('%s/data/submissions/%s' % (ROOT_DIR, filename)) as f:
         submission_data = [line.strip().split(',') for line in f.readlines()]
     t1 = Timer.log_elapsed_time('Loaded submission data', t0)
-    with open('%s/data/test/year1_test_triplets_hidden.txt' % ROOT_DIR) as f:
+    with open('%s/data/test/year1_valid_triplets_hidden.txt' % ROOT_DIR) as f:
         test_data = [line.strip().split('\t') for line in f.readlines()]
     t2 = Timer.log_elapsed_time('Loaded test data', t1)
-    return calculate_mAP(submission_data, test_data)
+    mAP = calculate_mAP(submission_data, test_data)
     t3 = Timer.log_elapsed_time('Evaluated test data', t2)
+    return mAP
 
 if __name__=='__main__':
     mAP = evaluate('submission.txt')
