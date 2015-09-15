@@ -6,6 +6,13 @@ $ npm install -g react-tools # Install React CLI
 $ jsx --watch static/js/src/ static/js/dist/ # Start JSX compiler
 ```
 
+###Setup
+```
+$ python # Initialize the local database
+>>> from server.database_init import init_db
+>>> init_db()
+```
+
 ###Million Song Dataset (MSD)
 This is a publicly available dataset of song metadata. Instructions for downloading the dataset are [here](http://labrosa.ee.columbia.edu/millionsong/pages/getting-dataset). Since I'm just using this for a (song id: song name) mapping, I just need to access the metadata database, which comes as part of the full snapshot. To do this, I needed to:
 1. Provision a separate AWS instance (US East), set up a public/private key pair, and set up a public DNS hostname
