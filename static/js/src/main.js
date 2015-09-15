@@ -42,6 +42,24 @@ var TopNav = React.createClass({
 });
 
 var SideNav = React.createClass({
+  componentDidMount: function() {
+    $.get('/api/songs.json', function(response) {
+      /*
+       * @response: {
+       *   data: ['Song1', 'Song2', 'Song3', ...]
+       * }
+       */
+      // Make sure component is mounted. Reference:
+      // https://facebook.github.io/react/tips/initial-ajax.html
+      if (this.isMounted()) {
+        $('#create-station-typeahead').typeahead({
+          source: response.data,
+          minLength: 1,
+          items: 8
+        });
+      }
+    }.bind(this));
+  },
   render: function() {
     var style = {
       height: '100%',
@@ -71,6 +89,7 @@ var SideNav = React.createClass({
       <div style={style}>
         <div style={inputStyle}>
           <ReactBootstrap.Input
+            id='create-station-typeahead'
             type='text'
             placeholder='Create Station'
             addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
