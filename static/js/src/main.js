@@ -43,6 +43,10 @@ var TopNav = React.createClass({
 
 var SideNav = React.createClass({
   componentDidMount: function() {
+    SC.initialize({
+      // Sucks that this has to be initialized on the client
+      client_id: '65c0de4e700c1180139971b979f997b6'
+    });
     $.get('/api/songs.json', function(response) {
       /*
        * @response: {
@@ -55,10 +59,20 @@ var SideNav = React.createClass({
         $('#create-station-typeahead').typeahead({
           source: response.data,
           minLength: 1,
-          items: 8
+          items: 8,
+          afterSelect: this.searchStation
         });
       }
     }.bind(this));
+  },
+  searchStation: function(item) {
+    console.log('Searching: ', item);
+    $.get('/api/songs', { query: item }, function(response) {
+      console.log('Response', response);
+      SC.stream('/tracks/' + response['id'], function(sound) {
+        sound.play();
+      });
+    });
   },
   render: function() {
     var style = {
@@ -171,6 +185,7 @@ var AudioPlayer = React.createClass({
       width: 250
     };
     var playIcon = this.state.playing ? 'pause' : 'play';
+    /*
     return (
       <div>
         <audio id='pndra-audio-player' autoPlay>
@@ -187,7 +202,23 @@ var AudioPlayer = React.createClass({
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='volume-up' />
         </div>
       </div>
-    )
+    );
+    */
+    return (
+      <div>
+        <div id='pndra-audio-player'>
+        </div>
+        {this.formatTime(this.state.currentTime)}/{this.formatTime(this.state.duration)}
+        <ReactBootstrap.ProgressBar style={progressBarStyle} active now={this.getProgress()} />
+        <div style={buttonRowStyle}>
+          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-up' />
+          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-down' />
+          <ReactBootstrap.Glyphicon style={buttonStyle} onClick={this.play} glyph={playIcon} />
+          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='fast-forward' />
+          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='volume-up' />
+        </div>
+      </div>
+    );
   }
 });
 
