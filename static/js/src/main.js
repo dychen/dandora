@@ -74,9 +74,9 @@ var SideNav = React.createClass({
     console.log('Searching: ', item);
     $.get('/api/songs', { query: item }, function(response) {
       console.log('Response', response);
+      /* WARNING: Memory leak */
       SC.stream('/tracks/' + response['id'], function(sound) {
         this.setState({ sound: sound });
-        sound.play();
       }.bind(this));
     }.bind(this));
   },
@@ -143,11 +143,16 @@ var AudioPlayer = React.createClass({
       // (http://www.schillmania.com/projects/soundmanager2/doc/) doesn't work!
       // This is how they do it in the SDK code...
       newProps.player._player.bind('positionChange', this.handleTimeUpdate);
+      newProps.player.play();
+      this.setState({ playing: true });
     }
     if (this.props.player) {
       // Clean up
+      this.props.player.stop();
       this.props.player._player.unbind('positionChange');
-      this.props.player.destruct();
+      // WARNING: THIS DOESN'T ACTUALLY CLEAN UP THE PREVIOUS SOUND OBJECTS!!!
+      // The soundManager2 API has a way to destroy sound objects. Would be
+      // nice if the SoundCloud API provided something similar...
     }
   },
   handleTimeUpdate: function() {
