@@ -42,6 +42,11 @@ var TopNav = React.createClass({
 });
 
 var SideNav = React.createClass({
+  getInitialState: function() {
+    return {
+      sound: null // Sound object from SoundCloud
+    };
+  },
   componentDidMount: function() {
     SC.initialize({
       // Sucks that this has to be initialized on the client
@@ -70,9 +75,10 @@ var SideNav = React.createClass({
     $.get('/api/songs', { query: item }, function(response) {
       console.log('Response', response);
       SC.stream('/tracks/' + response['id'], function(sound) {
+        this.setState({ sound: sound });
         sound.play();
-      });
-    });
+      }.bind(this));
+    }.bind(this));
   },
   render: function() {
     var style = {
@@ -109,7 +115,7 @@ var SideNav = React.createClass({
             addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
         </div>
 
-        <AudioPlayer />
+        <AudioPlayer player={this.state.sound} />
 
         <div style={songInfoStyle}>
           <div style={albumImgStyle}></div>
@@ -126,34 +132,44 @@ var AudioPlayer = React.createClass({
   getInitialState: function() {
     return {
       playing: true,
-      currentTime: 0,
+      currentPosition: 0,
       duration: 0
     };
   },
-  componentDidMount: function() {
-    // Might be buggy to set this up here. Need to ensure that all dependencies
-    // access this.mediaPlayer after this function finishes.
-    this.mediaPlayer = document.getElementById('pndra-audio-player');
-    this.mediaPlayer.addEventListener('timeupdate', this.handleTimeUpdate);
-  },
-  componentWillUnmount: function() {
-    this.mediaPlayer.removeEventListener('timeupdate', this.handleTimeUpdate);
+  componentWillReceiveProps: function(newProps) {
+    if (newProps && newProps.player) {
+      // This is super sketch, but the API docs don't provide a better way to
+      // do this (in particular, listening for whileplaying as documented here
+      // (http://www.schillmania.com/projects/soundmanager2/doc/) doesn't work!
+      // This is how they do it in the SDK code...
+      newProps.player._player.bind('positionChange', this.handleTimeUpdate);
+    }
+    if (this.props.player) {
+      // Clean up
+      this.props.player._player.unbind('positionChange');
+      this.props.player.destruct();
+    }
   },
   handleTimeUpdate: function() {
-    this.setState({
-      currentTime: this.mediaPlayer.currentTime,
-      duration: this.mediaPlayer.duration
-    });
+    if (this.props.player) {
+      this.setState({
+        currentPosition: this.props.player.getCurrentPosition() / 1000,
+        duration: this.props.player.getDuration() / 1000
+      });
+    }
   },
   play: function() {
-    if (this.state.playing === true)
-      this.mediaPlayer.pause();
-    else
-      this.mediaPlayer.play();
-    this.setState({ playing: !this.state.playing });
+    if (this.props.player) {
+      if (this.state.playing === true)
+        this.props.player.pause();
+      else {
+        this.props.player.play();
+      }
+      this.setState({ playing: !this.state.playing });
+    }
   },
   getProgress: function() {
-    return this.state.currentTime / this.state.duration * 100;
+    return this.state.currentPosition / this.state.duration * 100;
   },
   formatTime: function(seconds) {
     var sTotal = Math.round(seconds);
@@ -185,30 +201,11 @@ var AudioPlayer = React.createClass({
       width: 250
     };
     var playIcon = this.state.playing ? 'pause' : 'play';
-    /*
-    return (
-      <div>
-        <audio id='pndra-audio-player' autoPlay>
-          <source src='../media/Rachmaninov-Piano-Concerto-2-Op-18-C-minor-1-Moderato.mp3' type='audio/mpeg' />
-        </audio>
-
-        {this.formatTime(this.state.currentTime)}/{this.formatTime(this.state.duration)}
-        <ReactBootstrap.ProgressBar style={progressBarStyle} active now={this.getProgress()} />
-        <div style={buttonRowStyle}>
-          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-up' />
-          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-down' />
-          <ReactBootstrap.Glyphicon style={buttonStyle} onClick={this.play} glyph={playIcon} />
-          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='fast-forward' />
-          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='volume-up' />
-        </div>
-      </div>
-    );
-    */
     return (
       <div>
         <div id='pndra-audio-player'>
         </div>
-        {this.formatTime(this.state.currentTime)}/{this.formatTime(this.state.duration)}
+        {this.formatTime(this.state.currentPosition)}/{this.formatTime(this.state.duration)}
         <ReactBootstrap.ProgressBar style={progressBarStyle} active now={this.getProgress()} />
         <div style={buttonRowStyle}>
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-up' />
