@@ -44,7 +44,10 @@ var TopNav = React.createClass({
 var SideNav = React.createClass({
   getInitialState: function() {
     return {
-      sound: null // Sound object from SoundCloud
+      sound: null, // Sound object from SoundCloud,
+      title: null,
+      artist: null,
+      artworkUrl: null
     };
   },
   componentDidMount: function() {
@@ -74,6 +77,11 @@ var SideNav = React.createClass({
     console.log('Searching: ', item);
     $.get('/api/songs', { query: item }, function(response) {
       console.log('Response', response);
+      this.setState({
+        title: response.title,
+        artist: response.user,
+        artworkUrl: response.artwork_url
+      });
       /* WARNING: Memory leak */
       SC.stream('/tracks/' + response['id'], function(sound) {
         this.setState({ sound: sound });
@@ -105,6 +113,9 @@ var SideNav = React.createClass({
       width: 100,
       backgroundColor: 'white'
     };
+    var hidden = {
+      visibility: 'hidden'
+    };
     return (
       <div style={style}>
         <div style={inputStyle}>
@@ -117,11 +128,10 @@ var SideNav = React.createClass({
 
         <AudioPlayer player={this.state.sound} />
 
-        <div style={songInfoStyle}>
-          <div style={albumImgStyle}></div>
-          <div>Piano Concerto No. 2 in C Minor</div>
-          <div>Unknown</div>
-          <div>Unknown</div>
+        <div style={this.state.sound ? songInfoStyle : hidden}>
+          <img src={this.state.artworkUrl} style={albumImgStyle}></img>
+          <div>{this.state.title}</div>
+          <div>{this.state.artist}</div>
         </div>
       </div>
     );
