@@ -17,7 +17,7 @@ def shutdown_session(exception=None):
 def hello_world():
     return 'Hello World!'
 
-@app.route('/api/songs.json')
+@app.route('/api/songs')
 def songs():
     # Try quering a Redis cache for better performance
     LIMIT = 50000
@@ -27,10 +27,25 @@ def songs():
              for s in Song.query.limit(LIMIT).all()]
     print 'Queried songs in %.10fs' % (time.time() - start)
     return jsonify({
+        'length': len(songs),
         'data': songs
     })
 
-@app.route('/api/songs')
+@app.route('/api/playlist')
+def playlist():
+    LIMIT = 50000
+    def get_playlist(seed):
+        return list(set([s.artist for s in Song.query.limit(LIMIT).all()]))
+
+    seed = flask_request.args['query']
+    songs = get_playlist(seed)
+
+    return jsonify({
+        'length': len(songs),
+        'data': songs
+    })
+
+@app.route('/api/song')
 def song():
     """
     For response format, check:
@@ -59,7 +74,6 @@ def song():
         'artwork_url': song['artwork_url'],
         'permalink_url': song['permalink_url'],
         'stream_url': song['stream_url']
-
     })
 
 if __name__ == '__main__':

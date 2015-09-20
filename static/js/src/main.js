@@ -44,7 +44,9 @@ var TopNav = React.createClass({
 var SideNav = React.createClass({
   getInitialState: function() {
     return {
-      sound: null, // Sound object from SoundCloud,
+      playlists: [],
+      songs: [], // List of song/artist queries used to call the SC API
+      sound: null, // Sound object from SoundCloud
       title: null,
       artist: null,
       artworkUrl: null
@@ -55,7 +57,7 @@ var SideNav = React.createClass({
       // Sucks that this has to be initialized on the client
       client_id: '65c0de4e700c1180139971b979f997b6'
     });
-    $.get('/api/songs.json', function(response) {
+    $.get('/api/songs', function(response) {
       /*
        * @response: {
        *   data: ['Song1', 'Song2', 'Song3', ...]
@@ -75,16 +77,23 @@ var SideNav = React.createClass({
   },
   searchStation: function(item) {
     console.log('Searching: ', item);
-    $.get('/api/songs', { query: item }, function(response) {
-      console.log('Response', response);
+    $.get('/api/playlist', { query: item }, function(response) {
+      console.log(response);
       this.setState({
-        title: response.title,
-        artist: response.user,
-        artworkUrl: response.artwork_url
+        playlists: this.state.playlists.concat([item]),
+        songs: response.data
       });
-      /* WARNING: Memory leak */
-      SC.stream('/tracks/' + response['id'], function(sound) {
-        this.setState({ sound: sound });
+      $.get('/api/song', { query: response.data[0] }, function(response) {
+        console.log('Response', response);
+        this.setState({
+          title: response.title,
+          artist: response.user,
+          artworkUrl: response.artwork_url
+        });
+        /* WARNING: Memory leak */
+        SC.stream('/tracks/' + response['id'], function(sound) {
+          this.setState({ sound: sound });
+        }.bind(this));
       }.bind(this));
     }.bind(this));
   },
@@ -96,7 +105,8 @@ var SideNav = React.createClass({
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'space-around',
-      backgroundColor: COLORS.lightblue
+      backgroundColor: COLORS.lightblue,
+      color: 'white'
     };
     var inputStyle = {
       width: 250
@@ -126,6 +136,8 @@ var SideNav = React.createClass({
             addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
         </div>
 
+
+        <PlaylistList playlists={this.state.playlists} />
         <AudioPlayer player={this.state.sound} />
 
         <div style={this.state.sound ? songInfoStyle : hidden}>
@@ -134,6 +146,31 @@ var SideNav = React.createClass({
           <div>{this.state.artist}</div>
         </div>
       </div>
+    );
+  }
+});
+
+var PlaylistList = React.createClass({
+  render: function() {
+    var ulStyle = {
+      height: 200,
+      width: 250,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'left',
+      justifyContent: 'flex-start',
+      listStyle: 'none',
+      overflow: 'scroll'
+    };
+    var liStyle = {
+      padding: 5
+    };
+    return (
+      <ul style={ulStyle}>
+        {this.props.playlists.map(function(playlist) {
+          return <li style={liStyle}>{playlist}</li>
+        })}
+      </ul>
     );
   }
 });
