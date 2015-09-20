@@ -15,3 +15,43 @@ html, body {
   width: 100%;
 }
 
+#pndra-mainContainer {
+  height: 100%;
+  width: 100%;
+  /* display: 'flex', */
+  /* flexFlow: 'row wrap', */
+  background-image: url('http://www.pandora.com/static/valances/pandora/default/skin_background.jpg');
+  padding: 0;
+}
+
+#pndra-topNav {
+  height: 30px;
+  width: 100%;
+  position: fixed;
+  background-color: #1c3f5b;
+}
+
+#pndra-bodyContainer {
+  height: 100%;
+  width: 100%;
+}
+
+#pndra-sideNav {
+  padding-top: 30px; /* For top nav */
+  height: 100%;
+  width: 300px;
+  float: left;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  background-color: #465c7d;
+  color: white;
+}
+
+#pndra-mainView {
+  padding-top: 30px; /* For top nav */
+  padding-left: 300px; /* For side nav */
+  height: 100%;
+  width: 100%;
+}

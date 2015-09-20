@@ -9,19 +9,13 @@ var COLORS = {
 
 var MainContainer = React.createClass({
   render: function() {
-    var style = {
-      height: '100%',
-      width: '100%',
-      display: 'flex',
-      flexFlow: 'row wrap',
-      backgroundImage: 'url(' + BACKGROUND_URL + ')',
-      padding: 0
-    };
     return (
-      <div style={style} className='container'>
+      <div id='pndra-mainContainer' className='container'>
         <TopNav />
-        <SideNav />
-        <MainView />
+        <div id='pndra-bodyContainer'>
+          <SideNav />
+          <MainView />
+        </div>
       </div>
     );
   }
@@ -29,13 +23,8 @@ var MainContainer = React.createClass({
 
 var TopNav = React.createClass({
   render: function() {
-    var style = {
-      height: 30,
-      width: '100%',
-      backgroundColor: COLORS.darkblue
-    };
     return (
-      <div style={style}>
+      <div id='pndra-topNav'>
       </div>
     );
   }
@@ -143,16 +132,6 @@ var SideNav = React.createClass({
     });
   },
   render: function() {
-    var style = {
-      height: '100%',
-      width: 300,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'space-around',
-      backgroundColor: COLORS.lightblue,
-      color: 'white'
-    };
     var inputStyle = {
       width: 250
     };
@@ -172,7 +151,7 @@ var SideNav = React.createClass({
       visibility: 'hidden'
     };
     return (
-      <div style={style}>
+      <div id='pndra-sideNav'>
         <div style={inputStyle}>
           <ReactBootstrap.Input
             id='create-station-typeahead'
@@ -334,12 +313,8 @@ var AudioPlayer = React.createClass({
 
 var MainView = React.createClass({
   render: function() {
-    var style = {
-      height: '100%',
-      flex: '1 auto'
-    };
     return (
-      <div style={style}>
+      <div id='pndra-mainView'>
       </div>
     );
   }
