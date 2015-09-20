@@ -116,11 +116,29 @@ var SideNav = React.createClass({
     }.bind(this));
   },
   onSwitchPlaylist: function(playlistName) {
-    console.log('switch', playlistName);
     this.setState({
       currentPlaylist: playlistName
     }, function() {
       var playlist = this.getPlaylistByName(playlistName);
+      this.findAndPlaySong(playlist.songs[playlist.index]);
+    });
+  },
+  onSkipSong: function() {
+    // Consider React immutability helpers:
+    // https://facebook.github.io/react/docs/update.html
+    var playlistIndex = this.state.playlists.findIndex(function(playlist) {
+      return playlist.name === this.state.currentPlaylist;
+    }.bind(this));
+    // DANGER: I think this copies the reference, we we're manually mutating
+    //         state
+    // See: http://stackoverflow.com/questions/518000/
+    //        is-javascript-a-pass-by-reference-or-pass-by-value-language
+    var newPlaylists = this.state.playlists;
+    newPlaylists[playlistIndex].index++;
+    this.setState({
+      playlists: newPlaylists
+    }, function() {
+      var playlist = this.getPlaylistByName(this.state.currentPlaylist);
       this.findAndPlaySong(playlist.songs[playlist.index]);
     });
   },
@@ -166,7 +184,8 @@ var SideNav = React.createClass({
         <PlaylistList playlists={this.state.playlists}
                       currentPlaylist={this.state.currentPlaylist}
                       onSwitchPlaylist={this.onSwitchPlaylist} />
-        <AudioPlayer player={this.state.sound} />
+        <AudioPlayer player={this.state.sound}
+                     onSkipSong={this.onSkipSong} />
 
         <div style={this.state.sound ? songInfoStyle : hidden}>
           <img src={this.state.artworkUrl} style={albumImgStyle}></img>
@@ -191,7 +210,8 @@ var PlaylistList = React.createClass({
       overflow: 'scroll'
     };
     var liActive = {
-      fontWeight: 'bold'
+      fontWeight: 'bold',
+      padding: 5
     };
     var liStyle = {
       padding: 5
@@ -304,7 +324,7 @@ var AudioPlayer = React.createClass({
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-up' />
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-down' />
           <ReactBootstrap.Glyphicon style={buttonStyle} onClick={this.play} glyph={playIcon} />
-          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='fast-forward' />
+          <ReactBootstrap.Glyphicon style={buttonStyle} onClick={this.props.onSkipSong} glyph='fast-forward' />
           <ReactBootstrap.Glyphicon style={buttonStyle} glyph='volume-up' />
         </div>
       </div>
