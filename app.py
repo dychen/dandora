@@ -1,4 +1,5 @@
 import os
+import random
 import requests
 from flask import Flask, jsonify
 from flask import request as flask_request
@@ -35,7 +36,9 @@ def songs():
 def playlist():
     LIMIT = 50000
     def get_playlist(seed):
-        return list(set([s.artist for s in Song.query.limit(LIMIT).all()]))
+        songs = list(set([s.artist for s in Song.query.limit(LIMIT).all()]))
+        random.shuffle(songs)
+        return songs
 
     seed = flask_request.args['query']
     songs = get_playlist(seed)

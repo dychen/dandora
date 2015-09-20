@@ -44,8 +44,14 @@ var TopNav = React.createClass({
 var SideNav = React.createClass({
   getInitialState: function() {
     return {
+      /* Format: {
+       *   name: [str], // Playlist name
+       *   songs: [list], // List of songs titles to query on
+       *   index: [int] // Index of the currently playing song
+       * }
+       */
       playlists: [],
-      songs: [], // List of song/artist queries used to call the SC API
+      currentPlaylist: null,
       sound: null, // Sound object from SoundCloud
       title: null,
       artist: null,
@@ -75,27 +81,48 @@ var SideNav = React.createClass({
       }
     }.bind(this));
   },
+  getPlaylistByName: function(playlistName) {
+    return this.state.playlists.filter(function(playlist) {
+      return playlist.name === playlistName;
+    })[0];
+  },
   searchStation: function(item) {
     console.log('Searching: ', item);
     $.get('/api/playlist', { query: item }, function(response) {
       console.log(response);
       this.setState({
-        playlists: this.state.playlists.concat([item]),
-        songs: response.data
+        playlists: this.state.playlists.concat([{
+          name: item,
+          songs: response.data,
+          index: 0
+        }]),
+        currentPlaylist: item
       });
-      $.get('/api/song', { query: response.data[0] }, function(response) {
-        console.log('Response', response);
-        this.setState({
-          title: response.title,
-          artist: response.user,
-          artworkUrl: response.artwork_url
-        });
-        /* WARNING: Memory leak */
-        SC.stream('/tracks/' + response['id'], function(sound) {
-          this.setState({ sound: sound });
-        }.bind(this));
+      this.findAndPlaySong(response.data[0]);
+    }.bind(this));
+  },
+  findAndPlaySong: function(query) {
+    $.get('/api/song', { query: query }, function(response) {
+      console.log('Response', response);
+      this.setState({
+        title: response.title,
+        artist: response.user,
+        artworkUrl: response.artwork_url
+      });
+      /* WARNING: Memory leak */
+      SC.stream('/tracks/' + response['id'], function(sound) {
+        this.setState({ sound: sound });
       }.bind(this));
     }.bind(this));
+  },
+  onSwitchPlaylist: function(playlistName) {
+    console.log('switch', playlistName);
+    this.setState({
+      currentPlaylist: playlistName
+    }, function() {
+      var playlist = this.getPlaylistByName(playlistName);
+      this.findAndPlaySong(playlist.songs[playlist.index]);
+    });
   },
   render: function() {
     var style = {
@@ -136,8 +163,9 @@ var SideNav = React.createClass({
             addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
         </div>
 
-
-        <PlaylistList playlists={this.state.playlists} />
+        <PlaylistList playlists={this.state.playlists}
+                      currentPlaylist={this.state.currentPlaylist}
+                      onSwitchPlaylist={this.onSwitchPlaylist} />
         <AudioPlayer player={this.state.sound} />
 
         <div style={this.state.sound ? songInfoStyle : hidden}>
@@ -162,15 +190,28 @@ var PlaylistList = React.createClass({
       listStyle: 'none',
       overflow: 'scroll'
     };
+    var liActive = {
+      fontWeight: 'bold'
+    };
     var liStyle = {
       padding: 5
     };
     return (
-      <ul style={ulStyle}>
-        {this.props.playlists.map(function(playlist) {
-          return <li style={liStyle}>{playlist}</li>
-        })}
-      </ul>
+      <div>
+        <h4>Stations</h4>
+        <ul style={ulStyle}>
+          {this.props.playlists.map(function(playlist) {
+            return (
+              <li style={this.props.currentPlaylist === playlist.name
+                         ? liActive : liStyle}
+                  onClick={this.props.onSwitchPlaylist.bind(this, playlist.name)}
+                  className='hvr hvr-grow'>
+                {playlist.name}
+              </li>
+            );
+          }.bind(this))}
+        </ul>
+      </div>
     );
   }
 });
