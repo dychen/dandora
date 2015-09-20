@@ -300,11 +300,23 @@ var AudioPlayer = React.createClass({
         {this.formatTime(this.state.currentPosition)}/{this.formatTime(this.state.duration)}
         <ReactBootstrap.ProgressBar style={progressBarStyle} active now={this.getProgress()} />
         <div style={buttonRowStyle}>
-          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-up' />
-          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='thumbs-down' />
-          <ReactBootstrap.Glyphicon style={buttonStyle} onClick={this.play} glyph={playIcon} />
-          <ReactBootstrap.Glyphicon style={buttonStyle} onClick={this.props.onSkipSong} glyph='fast-forward' />
-          <ReactBootstrap.Glyphicon style={buttonStyle} glyph='volume-up' />
+          <ReactBootstrap.Glyphicon style={buttonStyle}
+                                    className='hvr'
+                                    glyph='thumbs-up' />
+          <ReactBootstrap.Glyphicon style={buttonStyle}
+                                    className='hvr'
+                                    glyph='thumbs-down' />
+          <ReactBootstrap.Glyphicon style={buttonStyle}
+                                    className='hvr'
+                                    glyph={playIcon}
+                                    onClick={this.play} />
+          <ReactBootstrap.Glyphicon style={buttonStyle}
+                                    className='hvr'
+                                    glyph='fast-forward'
+                                    onClick={this.props.onSkipSong} />
+          <ReactBootstrap.Glyphicon style={buttonStyle}
+                                    className='hvr'
+                                    glyph='volume-up' />
         </div>
       </div>
     );
