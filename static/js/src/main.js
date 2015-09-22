@@ -8,6 +8,15 @@ var COLORS = {
 };
 
 var MainContainer = React.createClass({
+  getInitialState: function() {
+    return {
+      playlistMetadata: {}
+    };
+  },
+  onPlaylistChange: function() {
+  },
+  onSongChange: function() {
+  },
   render: function() {
     return (
       <div id='pndra-mainContainer' className='container'>
@@ -79,15 +88,19 @@ var SideNav = React.createClass({
     console.log('Searching: ', item);
     $.get('/api/playlist', { query: item }, function(response) {
       console.log(response);
-      this.setState({
-        playlists: this.state.playlists.concat([{
-          name: item,
-          songs: response.data,
-          index: 0
-        }]),
-        currentPlaylist: item
-      });
-      this.findAndPlaySong(response.data[0]);
+      if (this.state.playlists.filter(function(playlist) {
+        return playlist.name === item;
+      }).length === 0) {
+        this.setState({
+          playlists: this.state.playlists.concat([{
+            name: item,
+            songs: response.data,
+            index: 0
+          }]),
+          currentPlaylist: item
+        });
+        this.findAndPlaySong(response.data[0]);
+      }
     }.bind(this));
   },
   findAndPlaySong: function(query) {
@@ -112,7 +125,7 @@ var SideNav = React.createClass({
       this.findAndPlaySong(playlist.songs[playlist.index]);
     });
   },
-  onSkipSong: function() {
+  onNextSong: function() {
     // Consider React immutability helpers:
     // https://facebook.github.io/react/docs/update.html
     var playlistIndex = this.state.playlists.findIndex(function(playlist) {
@@ -164,7 +177,7 @@ var SideNav = React.createClass({
                       currentPlaylist={this.state.currentPlaylist}
                       onSwitchPlaylist={this.onSwitchPlaylist} />
         <AudioPlayer player={this.state.sound}
-                     onSkipSong={this.onSkipSong} />
+                     onNextSong={this.onNextSong} />
 
         <div style={this.state.sound ? songInfoStyle : hidden}>
           <img src={this.state.artworkUrl} style={albumImgStyle}></img>
@@ -230,6 +243,7 @@ var AudioPlayer = React.createClass({
       // (http://www.schillmania.com/projects/soundmanager2/doc/) doesn't work!
       // This is how they do it in the SDK code...
       newProps.player._player.bind('positionChange', this.handleTimeUpdate);
+      newProps.player._player.bind('stateChange', this.handleStateChange);
       newProps.player.play();
       this.setState({ playing: true });
     }
@@ -237,6 +251,7 @@ var AudioPlayer = React.createClass({
       // Clean up
       this.props.player.stop();
       this.props.player._player.unbind('positionChange');
+      this.props.player._player.unbind('stateChange');
       // WARNING: THIS DOESN'T ACTUALLY CLEAN UP THE PREVIOUS SOUND OBJECTS!!!
       // The soundManager2 API has a way to destroy sound objects. Would be
       // nice if the SoundCloud API provided something similar...
@@ -249,6 +264,10 @@ var AudioPlayer = React.createClass({
         duration: this.props.player.getDuration() / 1000
       });
     }
+  },
+  handleStateChange: function() {
+    if (this.props.player && this.props.player._player._state === 'ended')
+      this.props.onNextSong();
   },
   play: function() {
     if (this.props.player) {
@@ -313,7 +332,7 @@ var AudioPlayer = React.createClass({
           <ReactBootstrap.Glyphicon style={buttonStyle}
                                     className='hvr'
                                     glyph='fast-forward'
-                                    onClick={this.props.onSkipSong} />
+                                    onClick={this.props.onNextSong} />
           <ReactBootstrap.Glyphicon style={buttonStyle}
                                     className='hvr'
                                     glyph='volume-up' />
