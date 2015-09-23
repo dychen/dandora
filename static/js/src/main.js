@@ -50,7 +50,6 @@ var SideNav = React.createClass({
        */
       playlists: [],
       currentPlaylist: null,
-      sound: null, // Sound object from SoundCloud
       title: null,
       artist: null,
       artworkUrl: null
@@ -111,9 +110,8 @@ var SideNav = React.createClass({
         artist: response.user,
         artworkUrl: response.artwork_url
       });
-      /* WARNING: Memory leak */
       SC.stream('/tracks/' + response['id'], function(sound) {
-        this.setState({ sound: sound });
+        this.setState({ audioSrc: sound._player._descriptor.src });
       }.bind(this));
     }.bind(this));
   },
@@ -176,10 +174,10 @@ var SideNav = React.createClass({
         <PlaylistList playlists={this.state.playlists}
                       currentPlaylist={this.state.currentPlaylist}
                       onSwitchPlaylist={this.onSwitchPlaylist} />
-        <AudioPlayer player={this.state.sound}
+        <AudioPlayer audioSrc={this.state.audioSrc}
                      onNextSong={this.onNextSong} />
 
-        <div style={this.state.sound ? songInfoStyle : hidden}>
+        <div style={this.state.audioSrc ? songInfoStyle : hidden}>
           <img src={this.state.artworkUrl} style={albumImgStyle}></img>
           <div>{this.state.title}</div>
           <div>{this.state.artist}</div>
@@ -236,48 +234,41 @@ var AudioPlayer = React.createClass({
       duration: 0
     };
   },
+  componentDidMount: function() {
+    this.mediaPlayer = document.getElementById('pndra-audio-player');
+    this.mediaPlayer.addEventListener('timeupdate', this.handleTimeUpdate);
+    this.mediaPlayer.addEventListener('ended', this.handleSongEnded);
+  },
+  componentWillUnmount: function() {
+    this.mediaPlayer.removeEventListener('timeupdate');
+    this.mediaPlayer.removeEventListener('ended');
+  },
   componentWillReceiveProps: function(newProps) {
-    if (newProps && newProps.player) {
-      // This is super sketch, but the API docs don't provide a better way to
-      // do this (in particular, listening for whileplaying as documented here
-      // (http://www.schillmania.com/projects/soundmanager2/doc/) doesn't work!
-      // This is how they do it in the SDK code...
-      newProps.player._player.bind('positionChange', this.handleTimeUpdate);
-      newProps.player._player.bind('stateChange', this.handleStateChange);
-      newProps.player.play();
+    if (newProps && newProps.audioSrc && newProps.audioSrc != this.props.audioSrc) {
+      this.mediaPlayer.setAttribute('src', newProps.audioSrc);
+      this.mediaPlayer.load(); // Reload the source
+      this.mediaPlayer.play();
       this.setState({ playing: true });
-    }
-    if (this.props.player) {
-      // Clean up
-      this.props.player.stop();
-      this.props.player._player.unbind('positionChange');
-      this.props.player._player.unbind('stateChange');
-      // WARNING: THIS DOESN'T ACTUALLY CLEAN UP THE PREVIOUS SOUND OBJECTS!!!
-      // The soundManager2 API has a way to destroy sound objects. Would be
-      // nice if the SoundCloud API provided something similar...
     }
   },
   handleTimeUpdate: function() {
-    if (this.props.player) {
+    if (this.mediaPlayer) {
       this.setState({
-        currentPosition: this.props.player.getCurrentPosition() / 1000,
-        duration: this.props.player.getDuration() / 1000
+        currentPosition: this.mediaPlayer.currentTime,
+        duration: this.mediaPlayer.duration
       });
     }
   },
-  handleStateChange: function() {
-    if (this.props.player && this.props.player._player._state === 'ended')
+  handleSongEnded: function() {
+    if (this.mediaPlayer)
       this.props.onNextSong();
   },
   play: function() {
-    if (this.props.player) {
-      if (this.state.playing === true)
-        this.props.player.pause();
-      else {
-        this.props.player.play();
-      }
-      this.setState({ playing: !this.state.playing });
-    }
+    if (this.state.playing === true)
+      this.mediaPlayer.pause();
+    else
+      this.mediaPlayer.play();
+    this.setState({ playing: !this.state.playing });
   },
   getProgress: function() {
     return this.state.currentPosition / this.state.duration * 100;
@@ -314,8 +305,8 @@ var AudioPlayer = React.createClass({
     var playIcon = this.state.playing ? 'pause' : 'play';
     return (
       <div>
-        <div id='pndra-audio-player'>
-        </div>
+        <audio id='pndra-audio-player'>
+        </audio>
         {this.formatTime(this.state.currentPosition)}/{this.formatTime(this.state.duration)}
         <ReactBootstrap.ProgressBar style={progressBarStyle} active now={this.getProgress()} />
         <div style={buttonRowStyle}>
