@@ -266,7 +266,7 @@ var AudioPlayer = React.createClass({
       this.analyser.getByteFrequencyData(this.freqArray);
     }.bind(this)
 
-    // Draw stuff
+    // Prepare to draw stuff
     this.canvas = document.getElementById('pndra-audioCanvas');
     this.canvasCtx = this.canvas.getContext('2d');
     this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -307,7 +307,7 @@ var AudioPlayer = React.createClass({
 
     // Time data
     this.canvasCtx.lineWidth = 1;
-    this.canvasCtx.strokeStyle = 'rgb(0, 102, 153)';
+    this.canvasCtx.strokeStyle = 'rgb(255, 255, 255)';
     this.canvasCtx.beginPath();
     var x = 0;
     for (var i = 0; i < bufferLength; i++) {
@@ -322,22 +322,29 @@ var AudioPlayer = React.createClass({
     this.canvasCtx.lineTo(this.canvas.width, this.canvas.height / 2);
     this.canvasCtx.stroke();
 
-    // Frequency data
-    this.canvasCtx.lineWidth = 1;
-    this.canvasCtx.strokeStyle = 'rgb(0, 153, 153)';
-    this.canvasCtx.beginPath();
+    // Frequency data (only sample the higher range (3/4) of frequencies)
+    var binSize = 10;
+    var barWidth = (this.canvas.width / (this.freqArray.length * 3/4)) * binSize;
+    var barHeight;
+    var binSum;
+    var heightRGB;
     var x = 0;
-    for (var i = 0; i < bufferLength; i++) {
-      var dFreq = this.freqArray[i];
-      var y = this.canvas.height - dFreq / 2;
-      if (i === 0)
-        this.canvasCtx.moveTo(x, y);
-      else
-        this.canvasCtx.lineTo(x, y);
-      x += sliceWidth;
+    var gradient = this.canvasCtx.createLinearGradient(0, 0, 0, this.canvas.height);
+    gradient.addColorStop(1, '#000066');
+    gradient.addColorStop(0.8, '#000099');
+    gradient.addColorStop(0.3, '#009900');
+    gradient.addColorStop(0, '#ffffff');
+    this.canvasCtx.fillStyle = gradient;
+    for (var i = 0; i < bufferLength * 3/4; i++) {
+      if (i % binSize === 0) {
+        barHeight = binSum / binSize;
+        heightRGB = 2 * barHeight / this.canvas.height * 255
+        this.canvasCtx.fillRect(x, this.canvas.height-barHeight, barWidth, barHeight);
+        x += barWidth;
+        binSum = 0;
+      }
+      binSum += this.freqArray[i] / 2;
     }
-    this.canvasCtx.lineTo(this.canvas.width, this.canvas.height / 2);
-    this.canvasCtx.stroke();
   },
   handleTimeUpdate: function() {
     if (this.audio) {
@@ -424,6 +431,8 @@ var MainView = React.createClass({
   render: function() {
     return (
       <div id='pndra-mainView'>
+        <div id='pndra-albumSelect'>
+        </div>
         <canvas id='pndra-audioCanvas'>
         </canvas>
       </div>
