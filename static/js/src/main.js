@@ -229,45 +229,132 @@ var PlaylistList = React.createClass({
 var AudioPlayer = React.createClass({
   getInitialState: function() {
     return {
-      playing: true,
+      playing: false,
       currentPosition: 0,
       duration: 0
     };
   },
   componentDidMount: function() {
-    this.mediaPlayer = document.getElementById('pndra-audio-player');
-    this.mediaPlayer.addEventListener('timeupdate', this.handleTimeUpdate);
-    this.mediaPlayer.addEventListener('ended', this.handleSongEnded);
+    this.audio = document.getElementById('pndra-audio-player');
+    this.audio.addEventListener('timeupdate', this.handleTimeUpdate);
+    this.audio.addEventListener('ended', this.handleSongEnded);
+    this.audio.crossOrigin = 'anonymous';
+
+    // Hook things up for processing:
+    // MediaElementSource -> AudioContext
+    this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    this.source = this.audioCtx.createMediaElementSource(this.audio);
+    this.source.connect(this.audioCtx.destination);
+
+    // Analyze waveform, hook more things up for processing:
+    // MediaElementSource -> Analyser -> ScriptProcessor -> AudioContext
+    this.analyser = this.audioCtx.createAnalyser();
+    this.processor = this.audioCtx.createScriptProcessor(1024);
+    this.source.connect(this.analyser);
+    this.analyser.connect(this.processor);
+    this.processor.connect(this.audioCtx.destination);
+
+    // Initialize data buffers
+    this.analyser.fftSize = 2048;
+
+    var bufferLength = this.analyser.frequencyBinCount;
+    this.timeArray = new Uint8Array(bufferLength);
+    this.freqArray = new Uint8Array(bufferLength);
+
+    this.processor.onaudioprocess = function() {
+      this.analyser.getByteTimeDomainData(this.timeArray);
+      this.analyser.getByteFrequencyData(this.freqArray);
+    }.bind(this)
+
+    // Draw stuff
+    this.canvas = document.getElementById('pndra-audioCanvas');
+    this.canvasCtx = this.canvas.getContext('2d');
+    this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   },
   componentWillUnmount: function() {
-    this.mediaPlayer.removeEventListener('timeupdate');
-    this.mediaPlayer.removeEventListener('ended');
+    this.audio.removeEventListener('timeupdate');
+    this.audio.removeEventListener('ended');
+
+    this.source.disconnect();
+    this.source = null;
+    this.processor.onaudioprocess = function() {};
   },
   componentWillReceiveProps: function(newProps) {
     if (newProps && newProps.audioSrc && newProps.audioSrc != this.props.audioSrc) {
-      this.mediaPlayer.setAttribute('src', newProps.audioSrc);
-      this.mediaPlayer.load(); // Reload the source
-      this.mediaPlayer.play();
+      this.audio.setAttribute('src', newProps.audioSrc);
+      this.audio.load(); // Reload the source
+      this.audio.play();
       this.setState({ playing: true });
     }
   },
+  componentDidUpdate: function(prevProps, prevState) {
+    // Start/restart animation
+    if (this.state.playing === true && prevState.playing === false) {
+      this.animationId = requestAnimationFrame(this.draw);
+    }
+    // Pause animation
+    else if (this.state.playing === false && prevState.playing === true) {
+      cancelAnimationFrame(this.animationId);
+      this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+  },
+  draw: function() {
+    var bufferLength = this.analyser.frequencyBinCount
+    var sliceWidth = this.canvas.width * 1.0 / bufferLength;
+
+    this.animationId = requestAnimationFrame(this.draw);
+    this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Time data
+    this.canvasCtx.lineWidth = 1;
+    this.canvasCtx.strokeStyle = 'rgb(0, 102, 153)';
+    this.canvasCtx.beginPath();
+    var x = 0;
+    for (var i = 0; i < bufferLength; i++) {
+      var dTime = this.timeArray[i] / 128.0;
+      var y = dTime * this.canvas.height / 2;
+      if (i === 0)
+        this.canvasCtx.moveTo(x, y);
+      else
+        this.canvasCtx.lineTo(x, y);
+      x += sliceWidth;
+    }
+    this.canvasCtx.lineTo(this.canvas.width, this.canvas.height / 2);
+    this.canvasCtx.stroke();
+
+    // Frequency data
+    this.canvasCtx.lineWidth = 1;
+    this.canvasCtx.strokeStyle = 'rgb(0, 153, 153)';
+    this.canvasCtx.beginPath();
+    var x = 0;
+    for (var i = 0; i < bufferLength; i++) {
+      var dFreq = this.freqArray[i];
+      var y = this.canvas.height - dFreq / 2;
+      if (i === 0)
+        this.canvasCtx.moveTo(x, y);
+      else
+        this.canvasCtx.lineTo(x, y);
+      x += sliceWidth;
+    }
+    this.canvasCtx.lineTo(this.canvas.width, this.canvas.height / 2);
+    this.canvasCtx.stroke();
+  },
   handleTimeUpdate: function() {
-    if (this.mediaPlayer) {
+    if (this.audio) {
       this.setState({
-        currentPosition: this.mediaPlayer.currentTime,
-        duration: this.mediaPlayer.duration
+        currentPosition: this.audio.currentTime,
+        duration: this.audio.duration
       });
     }
   },
   handleSongEnded: function() {
-    if (this.mediaPlayer)
-      this.props.onNextSong();
+    this.props.onNextSong();
   },
   play: function() {
     if (this.state.playing === true)
-      this.mediaPlayer.pause();
+      this.audio.pause();
     else
-      this.mediaPlayer.play();
+      this.audio.play();
     this.setState({ playing: !this.state.playing });
   },
   getProgress: function() {
@@ -323,7 +410,7 @@ var AudioPlayer = React.createClass({
           <ReactBootstrap.Glyphicon style={buttonStyle}
                                     className='hvr'
                                     glyph='fast-forward'
-                                    onClick={this.props.onNextSong} />
+                                    onClick={this.handleSongEnded} />
           <ReactBootstrap.Glyphicon style={buttonStyle}
                                     className='hvr'
                                     glyph='volume-up' />
@@ -337,6 +424,8 @@ var MainView = React.createClass({
   render: function() {
     return (
       <div id='pndra-mainView'>
+        <canvas id='pndra-audioCanvas'>
+        </canvas>
       </div>
     );
   }
