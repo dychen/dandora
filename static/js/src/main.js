@@ -493,14 +493,55 @@ var AudioPlayer = React.createClass({
 });
 
 var MainView = React.createClass({
+  ALBUMWIDTH: 155, // 150 + 5px padding
+  ALBUMPADDING: 50 + 15, // A bit of extra padding for buttons/right padding
+  getInitialState: function() {
+    return {
+      scrollIndex: 0,
+      maxNumAlbums: 0
+    };
+  },
+  componentDidMount: function() {
+    var windowWidth = $('#pndra-albumSelect').width();
+    this.setState({
+      maxNumAlbums: Math.floor((windowWidth - this.ALBUMPADDING)
+                                / this.ALBUMWIDTH)
+    });
+  },
+  handleResize: function() {
+    var windowWidth = $('#pndra-albumSelect').width();
+    var newMaxNumAlbums = Math.floor((windowWidth - this.ALBUMPADDING)
+                                     / this.ALBUMWIDTH);
+    if (newMaxNumAlbums !== this.maxNumAlbums) {
+      this.setState({
+        maxNumAlbums: newMaxNumAlbums
+      });
+    }
+  },
+  componentWillReceiveProps: function(newProps) {
+    this.setState({
+      scrollIndex: newProps.playlist.index
+    });
+  },
+  scrollLeft: function() {
+    if (this.state.scrollIndex - this.state.maxNumAlbums > 0) {
+      this.setState({
+        scrollIndex: this.state.scrollIndex - 1
+      });
+    }
+  },
+  scrollRight: function() {
+    if (this.state.scrollIndex < this.props.playlist.index) {
+      this.setState({
+        scrollIndex: this.state.scrollIndex + 1
+      });
+    }
+  },
   render: function() {
     var albums = [];
     if (this.props.playlist) {
-      var index = this.props.playlist.index;
-      var albumWidth = 155; // 150 + 5px padding. Subtract 5 for right padding
-                            // (fencepost)
-      var maxNumAlbums = Math.floor(($('#pndra-albumSelect').width() - 5) / albumWidth);
-      var albumLength = Math.min(maxNumAlbums, index + 1);
+      var index = this.state.scrollIndex;
+      var albumLength = Math.min(this.state.maxNumAlbums, index + 1);
       var songName;
       for (var i = 0; i < albumLength; i++) {
         songName = this.props.playlist.songs[(index+1) - albumLength + i];
@@ -508,19 +549,36 @@ var MainView = React.createClass({
           albums.push(this.props.songMetadata[songName]);
       }
     }
-    console.log(this.props, this.props.playlist, albums);
     return (
       <div id='pndra-mainView'>
         <div id='pndra-albumSelect'>
-          {albums.map(function(album) {
-            return (
-              <div className='pndra-album'>
-                <img src={album.artworkUrl}></img>
-                <div>{album.title}</div>
-                <div>{album.artist}</div>
-              </div>
-            );
-          })}
+          <ReactBootstrap.Button
+            className='pndra-albumNav btn btn-default'
+            onClick={this.scrollLeft}>
+            <ReactBootstrap.Glyphicon
+              className='hvr'
+              glyph='chevron-left' />
+          </ReactBootstrap.Button>
+          <div id='pndra-albumList'>
+            {albums.map(function(album) {
+              return (
+                <div className='pndra-album'>
+                  <img src={album.artworkUrl}></img>
+                  <span className='albumText'>
+                    <div>{album.title}</div>
+                    <div>{album.artist}</div>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <ReactBootstrap.Button
+            className='pndra-albumNav btn btn-default'
+            onClick={this.scrollRight}>
+            <ReactBootstrap.Glyphicon
+              className='hvr'
+              glyph='chevron-right' />
+          </ReactBootstrap.Button>
         </div>
         <span>
           <canvas id='pndra-audioCanvasLeft'>
