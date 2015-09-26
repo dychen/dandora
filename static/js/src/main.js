@@ -524,7 +524,7 @@ var MainView = React.createClass({
     });
   },
   scrollLeft: function() {
-    if (this.state.scrollIndex - this.state.maxNumAlbums > 0) {
+    if (this.state.scrollIndex - this.state.maxNumAlbums + 1 > 0) {
       this.setState({
         scrollIndex: this.state.scrollIndex - 1
       });
@@ -538,6 +538,9 @@ var MainView = React.createClass({
     }
   },
   render: function() {
+    var hidden = {
+      visibility: 'hidden'
+    };
     var albums = [];
     if (this.props.playlist) {
       var index = this.state.scrollIndex;
@@ -548,13 +551,18 @@ var MainView = React.createClass({
         if (songName in this.props.songMetadata)
           albums.push(this.props.songMetadata[songName]);
       }
+
+      var showLeftButton = this.state.scrollIndex >= this.state.maxNumAlbums;
+      var showRightButton = this.state.scrollIndex < this.props.playlist.index;
     }
     return (
       <div id='pndra-mainView'>
         <div id='pndra-albumSelect'>
           <ReactBootstrap.Button
             className='pndra-albumNav btn btn-default'
-            onClick={this.scrollLeft}>
+            onClick={this.scrollLeft}
+            style={showLeftButton ?
+                   { visibility: 'visible' } : { visibility: 'hidden' }}>
             <ReactBootstrap.Glyphicon
               className='hvr'
               glyph='chevron-left' />
@@ -574,7 +582,9 @@ var MainView = React.createClass({
           </div>
           <ReactBootstrap.Button
             className='pndra-albumNav btn btn-default'
-            onClick={this.scrollRight}>
+            onClick={this.scrollRight}
+            style={showRightButton ?
+                   { visibility: 'visible' } : { visibility: 'hidden' }}>
             <ReactBootstrap.Glyphicon
               className='hvr'
               glyph='chevron-right' />
