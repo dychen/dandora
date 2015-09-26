@@ -62,9 +62,15 @@ html, body {
   height: 400px;
 }
 
-#pndra-audioCanvas {
-  padding: 50px;
+#pndra-audioCanvasLeft {
+  padding: 20px;
+  width: 50%;
+  height: 300px;
+  float: left;
+}
+
+#pndra-audioCanvasRight {
+  padding: 20px;
   width: 50%;
   height: 300px;
 }
-

@@ -267,9 +267,15 @@ var AudioPlayer = React.createClass({
     }.bind(this)
 
     // Prepare to draw stuff
-    this.canvas = document.getElementById('pndra-audioCanvas');
-    this.canvasCtx = this.canvas.getContext('2d');
-    this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.canvasLeft = document.getElementById('pndra-audioCanvasLeft');
+    this.canvasLeftCtx = this.canvasLeft.getContext('2d');
+    this.canvasLeftCtx.clearRect(0, 0, this.canvasLeft.width, this.canvasLeft.height);
+    this.canvasRight = document.getElementById('pndra-audioCanvasRight');
+    this.canvasRightCtx = this.canvasRight.getContext('2d');
+    this.canvasRightCtx.clearRect(0, 0, this.canvasRight.width, this.canvasRight.height);
+    this.audioDataHistorical = [];
+    this.AUDIODATAWINDOWSIZE = 60 * 15; // Assuming refresh rate is 60 FPS and
+                                        // we want a 30 second window
   },
   componentWillUnmount: function() {
     this.audio.removeEventListener('timeupdate');
@@ -285,6 +291,7 @@ var AudioPlayer = React.createClass({
       this.audio.load(); // Reload the source
       this.audio.play();
       this.setState({ playing: true });
+      this.audioDataHistorical = [];
     }
   },
   componentDidUpdate: function(prevProps, prevState) {
@@ -295,56 +302,85 @@ var AudioPlayer = React.createClass({
     // Pause animation
     else if (this.state.playing === false && prevState.playing === true) {
       cancelAnimationFrame(this.animationId);
-      this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this.canvasLeftCtx.clearRect(0, 0, this.canvasLeft.width, this.canvasLeft.height);
+      this.canvasRightCtx.clearRect(0, 0, this.canvasRight.width, this.canvasRight.height);
     }
   },
-  draw: function() {
-    var bufferLength = this.analyser.frequencyBinCount
-    var sliceWidth = this.canvas.width * 1.0 / bufferLength;
-
-    this.animationId = requestAnimationFrame(this.draw);
-    this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    // Time data
-    this.canvasCtx.lineWidth = 1;
-    this.canvasCtx.strokeStyle = 'rgb(255, 255, 255)';
-    this.canvasCtx.beginPath();
+  drawTimeData: function() {
+    var sliceWidth = this.canvasLeft.width * 1.0 / this.timeArray.length;
+    this.canvasLeftCtx.lineWidth = 1;
+    this.canvasLeftCtx.strokeStyle = 'rgb(255, 255, 255)';
+    this.canvasLeftCtx.beginPath();
     var x = 0;
-    for (var i = 0; i < bufferLength; i++) {
+    for (var i = 0; i < this.timeArray.length; i++) {
       var dTime = this.timeArray[i] / 128.0;
-      var y = dTime * this.canvas.height / 2;
+      var y = dTime * this.canvasLeft.height / 2;
       if (i === 0)
-        this.canvasCtx.moveTo(x, y);
+        this.canvasLeftCtx.moveTo(x, y);
       else
-        this.canvasCtx.lineTo(x, y);
+        this.canvasLeftCtx.lineTo(x, y);
       x += sliceWidth;
     }
-    this.canvasCtx.lineTo(this.canvas.width, this.canvas.height / 2);
-    this.canvasCtx.stroke();
-
-    // Frequency data (only sample the higher range (3/4) of frequencies)
+    this.canvasLeftCtx.lineTo(this.canvasLeft.width, this.canvasLeft.height / 2);
+    this.canvasLeftCtx.stroke();
+  },
+  drawFreqData: function() {
     var binSize = 10;
-    var barWidth = (this.canvas.width / (this.freqArray.length * 3/4)) * binSize;
+    var barWidth = (this.canvasLeft.width / (this.freqArray.length * 3/4)) * binSize;
     var barHeight;
     var binSum;
-    var heightRGB;
     var x = 0;
-    var gradient = this.canvasCtx.createLinearGradient(0, 0, 0, this.canvas.height);
+    var gradient = this.canvasLeftCtx.createLinearGradient(0, 0, 0, this.canvasLeft.height);
     gradient.addColorStop(1, '#000066');
     gradient.addColorStop(0.8, '#000099');
-    gradient.addColorStop(0.3, '#009900');
+    //gradient.addColorStop(0.3, '#009900');
     gradient.addColorStop(0, '#ffffff');
-    this.canvasCtx.fillStyle = gradient;
-    for (var i = 0; i < bufferLength * 3/4; i++) {
+    this.canvasLeftCtx.fillStyle = gradient;
+    for (var i = 0; i < this.freqArray.length * 3/4; i++) {
       if (i % binSize === 0) {
         barHeight = binSum / binSize;
-        heightRGB = 2 * barHeight / this.canvas.height * 255
-        this.canvasCtx.fillRect(x, this.canvas.height-barHeight, barWidth, barHeight);
+        this.canvasLeftCtx.fillRect(x, this.canvasLeft.height-barHeight, barWidth, barHeight);
         x += barWidth;
         binSum = 0;
       }
       binSum += this.freqArray[i] / 2;
     }
+  },
+  drawFreqTimeseries: function() {
+    var x = 0;
+    var barWidth = this.canvasRight.width / this.AUDIODATAWINDOWSIZE;
+    var barHeight;
+    var avgFreq = 0;
+    var gradient = this.canvasRightCtx.createLinearGradient(0, 0, 0, this.canvasRight.height);
+    gradient.addColorStop(1, '#000066');
+    gradient.addColorStop(0.8, '#000099');
+    //gradient.addColorStop(0.3, '#009900');
+    gradient.addColorStop(0, '#ffffff');
+    this.canvasRightCtx.fillStyle = gradient;
+    for (var i = 0; i < this.freqArray.length; i++) {
+      avgFreq += this.freqArray[i];
+    }
+    avgFreq /= this.freqArray.length;
+    if (this.audioDataHistorical.length === this.AUDIODATAWINDOWSIZE)
+      this.audioDataHistorical.shift();
+    this.audioDataHistorical.push(avgFreq);
+    for (var i = 0; i < this.audioDataHistorical.length; i++) {
+      barHeight = this.audioDataHistorical[i];
+      this.canvasRightCtx.fillRect(x, this.canvasRight.height-barHeight, barWidth, barHeight);
+      x += barWidth;
+    }
+  },
+  draw: function() {
+    this.animationId = requestAnimationFrame(this.draw);
+
+    // Left canvas
+    this.canvasLeftCtx.clearRect(0, 0, this.canvasLeft.width, this.canvasLeft.height);
+    this.drawTimeData();
+    this.drawFreqData();
+
+    // Right canvas
+    this.canvasRightCtx.clearRect(0, 0, this.canvasRight.width, this.canvasRight.height);
+    this.drawFreqTimeseries();
   },
   handleTimeUpdate: function() {
     if (this.audio) {
@@ -433,8 +469,12 @@ var MainView = React.createClass({
       <div id='pndra-mainView'>
         <div id='pndra-albumSelect'>
         </div>
-        <canvas id='pndra-audioCanvas'>
-        </canvas>
+        <span>
+          <canvas id='pndra-audioCanvasLeft'>
+          </canvas>
+          <canvas id='pndra-audioCanvasRight'>
+          </canvas>
+        </span>
       </div>
     );
   }
