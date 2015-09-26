@@ -10,19 +10,95 @@ var COLORS = {
 var MainContainer = React.createClass({
   getInitialState: function() {
     return {
-      playlistMetadata: {}
+      currentPlaylist: '',
+      /* Format: {
+       *   name: [str], // Playlist name
+       *   songs: [list] // List of songs titles to query on
+       *   index: [int] // Index of the currently playing song
+       *   maxIndx: [int] // Index of the lastest song played
+       * }
+       */
+      playlists: [],
+      /*
+       * Format: {
+       *   [song query]: {
+       *     title: [str],
+       *     artist: [str],
+       *     artwork: [str]
+       *   },
+       *   ...
+       * }
+       */
+      songMetadata: {}
     };
   },
-  onPlaylistChange: function() {
+  getPlaylistByName: function(playlistName) {
+    return this.state.playlists.filter(function(playlist) {
+      return playlist.name === playlistName;
+    })[0];
   },
-  onSongChange: function() {
+  onSearchStation: function(query, songs) {
+    if (this.state.playlists.filter(function(playlist) {
+      return playlist.name === query;
+    }).length === 0) {
+      this.setState({
+        playlists: this.state.playlists.concat([{
+          name: query,
+          songs: songs,
+          index: 0,
+          maxIndex: 0
+        }]),
+        currentPlaylist: query
+      });
+    }
+  },
+  onFindAndPlaySong: function(query, response) {
+    var newSongMetadata = this.state.songMetadata;
+    newSongMetadata[query] = {
+      title: response.title,
+      artist: response.user,
+      artworkUrl: response.artwork_url
+    }
+    this.setState(newSongMetadata);
+  },
+  onSwitchPlaylist: function(playlistName, callback) {
+    this.setState({
+      currentPlaylist: playlistName
+    }, function() {
+      var playlist = this.getPlaylistByName(playlistName);
+      callback(playlist.songs[playlist.index]);
+    });
+  },
+  onNextSong: function(callback) {
+    // Consider React immutability helpers:
+    // https://facebook.github.io/react/docs/update.html
+    var playlistIndex = this.state.playlists.findIndex(function(playlist) {
+      return playlist.name === this.state.currentPlaylist;
+    }.bind(this));
+    // DANGER: I think this copies by reference and we're manually mutating
+    //         state (outside of this.setState())
+    // See: http://stackoverflow.com/questions/518000/
+    //        is-javascript-a-pass-by-reference-or-pass-by-value-language
+    var newPlaylists = this.state.playlists;
+    newPlaylists[playlistIndex].index++;
+    this.setState({
+      playlists: newPlaylists
+    }, function() {
+      var playlist = this.getPlaylistByName(this.state.currentPlaylist);
+      callback(playlist.songs[playlist.index]);
+    });
   },
   render: function() {
     return (
       <div id='pndra-mainContainer' className='container'>
         <TopNav />
         <div id='pndra-bodyContainer'>
-          <SideNav />
+          <SideNav playlists={this.state.playlists}
+                   currentPlaylist={this.state.currentPlaylist}
+                   onSearchStation={this.onSearchStation}
+                   onFindAndPlaySong={this.onFindAndPlaySong}
+                   onSwitchPlaylist={this.onSwitchPlaylist}
+                   onNextSong={this.onNextSong} />
           <MainView />
         </div>
       </div>
@@ -42,14 +118,6 @@ var TopNav = React.createClass({
 var SideNav = React.createClass({
   getInitialState: function() {
     return {
-      /* Format: {
-       *   name: [str], // Playlist name
-       *   songs: [list], // List of songs titles to query on
-       *   index: [int] // Index of the currently playing song
-       * }
-       */
-      playlists: [],
-      currentPlaylist: null,
       title: null,
       artist: null,
       artworkUrl: null
@@ -78,33 +146,16 @@ var SideNav = React.createClass({
       }
     }.bind(this));
   },
-  getPlaylistByName: function(playlistName) {
-    return this.state.playlists.filter(function(playlist) {
-      return playlist.name === playlistName;
-    })[0];
-  },
   searchStation: function(item) {
-    console.log('Searching: ', item);
     $.get('/api/playlist', { query: item }, function(response) {
-      console.log(response);
-      if (this.state.playlists.filter(function(playlist) {
-        return playlist.name === item;
-      }).length === 0) {
-        this.setState({
-          playlists: this.state.playlists.concat([{
-            name: item,
-            songs: response.data,
-            index: 0
-          }]),
-          currentPlaylist: item
-        });
-        this.findAndPlaySong(response.data[0]);
-      }
+      this.props.onSearchStation(item, response.data);
+      this.findAndPlaySong(response.data[0]);
     }.bind(this));
   },
   findAndPlaySong: function(query) {
     $.get('/api/song', { query: query }, function(response) {
       console.log('Response', response);
+      this.props.onFindAndPlaySong(query, response);
       this.setState({
         title: response.title,
         artist: response.user,
@@ -115,32 +166,11 @@ var SideNav = React.createClass({
       }.bind(this));
     }.bind(this));
   },
-  onSwitchPlaylist: function(playlistName) {
-    this.setState({
-      currentPlaylist: playlistName
-    }, function() {
-      var playlist = this.getPlaylistByName(playlistName);
-      this.findAndPlaySong(playlist.songs[playlist.index]);
-    });
+  switchPlaylist: function(playlistName) {
+    this.props.onSwitchPlaylist(playlistName, this.findAndPlaySong);
   },
-  onNextSong: function() {
-    // Consider React immutability helpers:
-    // https://facebook.github.io/react/docs/update.html
-    var playlistIndex = this.state.playlists.findIndex(function(playlist) {
-      return playlist.name === this.state.currentPlaylist;
-    }.bind(this));
-    // DANGER: I think this copies the reference, we we're manually mutating
-    //         state
-    // See: http://stackoverflow.com/questions/518000/
-    //        is-javascript-a-pass-by-reference-or-pass-by-value-language
-    var newPlaylists = this.state.playlists;
-    newPlaylists[playlistIndex].index++;
-    this.setState({
-      playlists: newPlaylists
-    }, function() {
-      var playlist = this.getPlaylistByName(this.state.currentPlaylist);
-      this.findAndPlaySong(playlist.songs[playlist.index]);
-    });
+  nextSong: function() {
+    this.props.onNextSong(this.findAndPlaySong);
   },
   render: function() {
     var inputStyle = {
@@ -171,11 +201,11 @@ var SideNav = React.createClass({
             addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
         </div>
 
-        <PlaylistList playlists={this.state.playlists}
-                      currentPlaylist={this.state.currentPlaylist}
-                      onSwitchPlaylist={this.onSwitchPlaylist} />
+        <PlaylistList playlists={this.props.playlists}
+                      currentPlaylist={this.props.currentPlaylist}
+                      switchPlaylist={this.switchPlaylist} />
         <AudioPlayer audioSrc={this.state.audioSrc}
-                     onNextSong={this.onNextSong} />
+                     nextSong={this.nextSong} />
 
         <div style={this.state.audioSrc ? songInfoStyle : hidden}>
           <img src={this.state.artworkUrl} style={albumImgStyle}></img>
@@ -214,7 +244,7 @@ var PlaylistList = React.createClass({
             return (
               <li style={this.props.currentPlaylist === playlist.name
                          ? liActive : liStyle}
-                  onClick={this.props.onSwitchPlaylist.bind(this, playlist.name)}
+                  onClick={this.props.switchPlaylist.bind(this, playlist.name)}
                   className='hvr hvr-grow'>
                 {playlist.name}
               </li>
@@ -296,15 +326,11 @@ var AudioPlayer = React.createClass({
   },
   componentDidUpdate: function(prevProps, prevState) {
     // Start/restart animation
-    if (this.state.playing === true && prevState.playing === false) {
+    if (this.state.playing === true && prevState.playing === false)
       this.animationId = requestAnimationFrame(this.draw);
-    }
     // Pause animation
-    else if (this.state.playing === false && prevState.playing === true) {
+    else if (this.state.playing === false && prevState.playing === true)
       cancelAnimationFrame(this.animationId);
-      this.canvasLeftCtx.clearRect(0, 0, this.canvasLeft.width, this.canvasLeft.height);
-      this.canvasRightCtx.clearRect(0, 0, this.canvasRight.width, this.canvasRight.height);
-    }
   },
   drawTimeData: function() {
     var sliceWidth = this.canvasLeft.width * 1.0 / this.timeArray.length;
@@ -333,7 +359,6 @@ var AudioPlayer = React.createClass({
     var gradient = this.canvasLeftCtx.createLinearGradient(0, 0, 0, this.canvasLeft.height);
     gradient.addColorStop(1, '#000066');
     gradient.addColorStop(0.8, '#000099');
-    //gradient.addColorStop(0.3, '#009900');
     gradient.addColorStop(0, '#ffffff');
     this.canvasLeftCtx.fillStyle = gradient;
     for (var i = 0; i < this.freqArray.length * 3/4; i++) {
@@ -354,7 +379,6 @@ var AudioPlayer = React.createClass({
     var gradient = this.canvasRightCtx.createLinearGradient(0, 0, 0, this.canvasRight.height);
     gradient.addColorStop(1, '#000066');
     gradient.addColorStop(0.8, '#000099');
-    //gradient.addColorStop(0.3, '#009900');
     gradient.addColorStop(0, '#ffffff');
     this.canvasRightCtx.fillStyle = gradient;
     for (var i = 0; i < this.freqArray.length; i++) {
@@ -391,7 +415,7 @@ var AudioPlayer = React.createClass({
     }
   },
   handleSongEnded: function() {
-    this.props.onNextSong();
+    this.props.nextSong();
   },
   play: function() {
     if (this.state.playing === true)
