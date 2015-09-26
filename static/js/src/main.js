@@ -24,7 +24,7 @@ var MainContainer = React.createClass({
        *   [song query]: {
        *     title: [str],
        *     artist: [str],
-       *     artwork: [str]
+       *     artworkUrl: [str]
        *   },
        *   ...
        * }
@@ -53,6 +53,10 @@ var MainContainer = React.createClass({
     }
   },
   onFindAndPlaySong: function(query, response) {
+    // DANGER: I think this copies by reference and we're manually mutating
+    //         state (outside of this.setState())
+    // See: http://stackoverflow.com/questions/518000/
+    //        is-javascript-a-pass-by-reference-or-pass-by-value-language
     var newSongMetadata = this.state.songMetadata;
     newSongMetadata[query] = {
       title: response.title,
@@ -99,7 +103,8 @@ var MainContainer = React.createClass({
                    onFindAndPlaySong={this.onFindAndPlaySong}
                    onSwitchPlaylist={this.onSwitchPlaylist}
                    onNextSong={this.onNextSong} />
-          <MainView />
+          <MainView playlist={this.getPlaylistByName(this.state.currentPlaylist)}
+                    songMetadata={this.state.songMetadata} />
         </div>
       </div>
     );
@@ -489,9 +494,33 @@ var AudioPlayer = React.createClass({
 
 var MainView = React.createClass({
   render: function() {
+    var albums = [];
+    if (this.props.playlist) {
+      var index = this.props.playlist.index;
+      var albumWidth = 155; // 150 + 5px padding. Subtract 5 for right padding
+                            // (fencepost)
+      var maxNumAlbums = Math.floor(($('#pndra-albumSelect').width() - 5) / albumWidth);
+      var albumLength = Math.min(maxNumAlbums, index + 1);
+      var songName;
+      for (var i = 0; i < albumLength; i++) {
+        songName = this.props.playlist.songs[(index+1) - albumLength + i];
+        if (songName in this.props.songMetadata)
+          albums.push(this.props.songMetadata[songName]);
+      }
+    }
+    console.log(this.props, this.props.playlist, albums);
     return (
       <div id='pndra-mainView'>
         <div id='pndra-albumSelect'>
+          {albums.map(function(album) {
+            return (
+              <div className='pndra-album'>
+                <img src={album.artworkUrl}></img>
+                <div>{album.title}</div>
+                <div>{album.artist}</div>
+              </div>
+            );
+          })}
         </div>
         <span>
           <canvas id='pndra-audioCanvasLeft'>
