@@ -49,6 +49,29 @@ html, body {
   color: white;
 }
 
+#pndra-createStationInput {
+  width: 250px;
+}
+
+#pndra-sideNavAlbum {
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 250px;
+  width: 250px;
+}
+
+#pndra-sideNavAlbum.album-hidden {
+  visibility: hidden;
+}
+
+#pndra-sideNavAlbum img {
+  height: 100px;
+  width: 100px;
+  background-color: white;
+}
+
 #pndra-mainView {
   padding-top: 30px; /* For top nav */
   padding-left: 300px; /* For side nav */

@@ -7,6 +7,9 @@ var COLORS = {
   lightblue: '#465c7d'
 };
 
+var SPINNER = new Spinner({ color: 'white' }).spin(document.getElementById('pndra-spinner'));
+SPINNER.stop();
+
 var MainContainer = React.createClass({
   getInitialState: function() {
     return {
@@ -58,6 +61,7 @@ var MainContainer = React.createClass({
     }
   },
   onFindAndPlaySong: function(query) {
+    SPINNER.spin(document.getElementById('pndra-spinner'));
     $.get('/api/song', { query: query }, function(response) {
       console.log('Response', response);
       // DANGER: I think this copies by reference and we're manually mutating
@@ -78,6 +82,7 @@ var MainContainer = React.createClass({
       });
       SC.stream('/tracks/' + response['id'], function(sound) {
         this.setState({ audioSrc: sound._player._descriptor.src });
+        SPINNER.stop();
       }.bind(this));
     }.bind(this));
   },
@@ -95,7 +100,8 @@ var MainContainer = React.createClass({
     var playlistIndex = this.getPlaylistIndexByName(this.state.currentPlaylist);
     var newPlaylists = React.addons.update(this.state.playlists, {
       [playlistIndex]: {
-        maxIndex: { $set: this.state.playlists[playlistIndex].maxIndex + 1 }
+        maxIndex: { $set: this.state.playlists[playlistIndex].maxIndex + 1 },
+        index: { $set: this.state.playlists[playlistIndex].maxIndex + 1}
       }
     });
     this.setState({
@@ -178,6 +184,7 @@ var SideNav = React.createClass({
     $.get('/api/playlist', { query: item }, function(response) {
       this.props.onSearchStation(item, response.data);
       this.props.onFindAndPlaySong(response.data[0]);
+      $('#create-station-typeahead').text('');
     }.bind(this));
   },
   switchPlaylist: function(playlistName) {
@@ -187,27 +194,12 @@ var SideNav = React.createClass({
     this.props.onNextSong(this.props.onFindAndPlaySong);
   },
   render: function() {
-    var inputStyle = {
-      width: 250
-    };
-    var songInfoStyle = {
-      color: 'white',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      width: 250
-    };
-    var albumImgStyle = {
-      height: 100,
-      width: 100,
-      backgroundColor: 'white'
-    };
     var hidden = {
       visibility: 'hidden'
     };
     return (
       <div id='pndra-sideNav'>
-        <div style={inputStyle}>
+        <div id='pndra-createStationInput'>
           <ReactBootstrap.Input
             id='create-station-typeahead'
             type='text'
@@ -221,8 +213,9 @@ var SideNav = React.createClass({
         <AudioPlayer audioSrc={this.props.audioSrc}
                      nextSong={this.nextSong} />
 
-        <div style={this.props.audioSrc ? songInfoStyle : hidden}>
-          <img src={this.props.artworkUrl} style={albumImgStyle}></img>
+        <div id='pndra-sideNavAlbum'
+          className={this.props.audioSrc ? '' : 'album-hidden'}>
+          <img src={this.props.artworkUrl}></img>
           <div>{this.props.title}</div>
           <div>{this.props.artist}</div>
         </div>
@@ -572,8 +565,9 @@ var MainView = React.createClass({
           <div id='pndra-albumList'>
             {albums.map(function(album, i) {
               return (
-                <div className={this.props.playlist.index === album.index ?
-                                'pndra-album selected' : 'pndra-album'}
+                <div className={this.props.playlist.index === album.index
+                                ? 'pndra-album hvr hvr-grow selected'
+                                : 'pndra-album hvr hvr-grow'}
                   onClick={this.props.onSelectSong.bind(this, album.index)}>
                   <img src={album.artworkUrl}></img>
                   <span className='albumText'>
