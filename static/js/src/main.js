@@ -15,7 +15,7 @@ var MainContainer = React.createClass({
        *   name: [str], // Playlist name
        *   songs: [list] // List of songs titles to query on
        *   index: [int] // Index of the currently playing song
-       *   maxIndx: [int] // Index of the lastest song played
+       *   maxIndex: [int] // Index of the lastest song played
        * }
        */
       playlists: [],
@@ -37,6 +37,11 @@ var MainContainer = React.createClass({
       return playlist.name === playlistName;
     })[0];
   },
+  getPlaylistIndexByName: function(playlistName) {
+    return this.state.playlists.findIndex(function(playlist) {
+      return playlist.name === playlistName;
+    }.bind(this));
+  },
   onSearchStation: function(query, songs) {
     if (this.state.playlists.filter(function(playlist) {
       return playlist.name === query;
@@ -52,44 +57,62 @@ var MainContainer = React.createClass({
       });
     }
   },
-  onFindAndPlaySong: function(query, response) {
-    // DANGER: I think this copies by reference and we're manually mutating
-    //         state (outside of this.setState())
-    // See: http://stackoverflow.com/questions/518000/
-    //        is-javascript-a-pass-by-reference-or-pass-by-value-language
-    var newSongMetadata = this.state.songMetadata;
-    newSongMetadata[query] = {
-      title: response.title,
-      artist: response.user,
-      artworkUrl: response.artwork_url
-    }
-    this.setState(newSongMetadata);
+  onFindAndPlaySong: function(query) {
+    $.get('/api/song', { query: query }, function(response) {
+      console.log('Response', response);
+      // DANGER: I think this copies by reference and we're manually mutating
+      //         state (outside of this.setState())
+      // See: http://stackoverflow.com/questions/518000/
+      //        is-javascript-a-pass-by-reference-or-pass-by-value-language
+      var newSongMetadata = this.state.songMetadata;
+      newSongMetadata[query] = {
+        title: response.title,
+        artist: response.user,
+        artworkUrl: response.artwork_url
+      }
+      this.setState({
+        songMetadata: newSongMetadata,
+        title: response.title,
+        artist: response.user,
+        artworkUrl: response.artwork_url
+      });
+      SC.stream('/tracks/' + response['id'], function(sound) {
+        this.setState({ audioSrc: sound._player._descriptor.src });
+      }.bind(this));
+    }.bind(this));
   },
   onSwitchPlaylist: function(playlistName, callback) {
     this.setState({
       currentPlaylist: playlistName
     }, function() {
       var playlist = this.getPlaylistByName(playlistName);
-      callback(playlist.songs[playlist.index]);
+      callback(playlist.songs[playlist.maxIndex]);
     });
   },
   onNextSong: function(callback) {
-    // Consider React immutability helpers:
+    // React immutability helpers documentation:
     // https://facebook.github.io/react/docs/update.html
-    var playlistIndex = this.state.playlists.findIndex(function(playlist) {
-      return playlist.name === this.state.currentPlaylist;
-    }.bind(this));
-    // DANGER: I think this copies by reference and we're manually mutating
-    //         state (outside of this.setState())
-    // See: http://stackoverflow.com/questions/518000/
-    //        is-javascript-a-pass-by-reference-or-pass-by-value-language
-    var newPlaylists = this.state.playlists;
-    newPlaylists[playlistIndex].index++;
+    var playlistIndex = this.getPlaylistIndexByName(this.state.currentPlaylist);
+    var newPlaylists = React.addons.update(this.state.playlists, {
+      [playlistIndex]: {
+        maxIndex: { $set: this.state.playlists[playlistIndex].maxIndex + 1 }
+      }
+    });
     this.setState({
       playlists: newPlaylists
     }, function() {
       var playlist = this.getPlaylistByName(this.state.currentPlaylist);
-      callback(playlist.songs[playlist.index]);
+      callback(playlist.songs[playlist.maxIndex]);
+    });
+  },
+  onSelectSong: function(index) {
+    var playlistIndex = this.getPlaylistIndexByName(this.state.currentPlaylist);
+    var newPlaylists = this.state.playlists;
+    newPlaylists[playlistIndex].index = index;
+    this.setState({
+      playlists: newPlaylists
+    }, function() {
+      this.onFindAndPlaySong(newPlaylists[playlistIndex].songs[index]);
     });
   },
   render: function() {
@@ -99,12 +122,18 @@ var MainContainer = React.createClass({
         <div id='pndra-bodyContainer'>
           <SideNav playlists={this.state.playlists}
                    currentPlaylist={this.state.currentPlaylist}
+                   title={this.state.title}
+                   album={this.state.artist}
+                   artwork={this.state.artworkUrl}
+                   audioSrc={this.state.audioSrc}
                    onSearchStation={this.onSearchStation}
                    onFindAndPlaySong={this.onFindAndPlaySong}
                    onSwitchPlaylist={this.onSwitchPlaylist}
                    onNextSong={this.onNextSong} />
           <MainView playlist={this.getPlaylistByName(this.state.currentPlaylist)}
-                    songMetadata={this.state.songMetadata} />
+                    songMetadata={this.state.songMetadata}
+                    onFindAndPlaySong={this.onFindAndPlaySong}
+                    onSelectSong={this.onSelectSong} />
         </div>
       </div>
     );
@@ -121,13 +150,7 @@ var TopNav = React.createClass({
 });
 
 var SideNav = React.createClass({
-  getInitialState: function() {
-    return {
-      title: null,
-      artist: null,
-      artworkUrl: null
-    };
-  },
+  /* NOTE: Moved all state to props */
   componentDidMount: function() {
     SC.initialize({
       // Sucks that this has to be initialized on the client
@@ -154,28 +177,14 @@ var SideNav = React.createClass({
   searchStation: function(item) {
     $.get('/api/playlist', { query: item }, function(response) {
       this.props.onSearchStation(item, response.data);
-      this.findAndPlaySong(response.data[0]);
-    }.bind(this));
-  },
-  findAndPlaySong: function(query) {
-    $.get('/api/song', { query: query }, function(response) {
-      console.log('Response', response);
-      this.props.onFindAndPlaySong(query, response);
-      this.setState({
-        title: response.title,
-        artist: response.user,
-        artworkUrl: response.artwork_url
-      });
-      SC.stream('/tracks/' + response['id'], function(sound) {
-        this.setState({ audioSrc: sound._player._descriptor.src });
-      }.bind(this));
+      this.props.onFindAndPlaySong(response.data[0]);
     }.bind(this));
   },
   switchPlaylist: function(playlistName) {
-    this.props.onSwitchPlaylist(playlistName, this.findAndPlaySong);
+    this.props.onSwitchPlaylist(playlistName, this.props.onFindAndPlaySong);
   },
   nextSong: function() {
-    this.props.onNextSong(this.findAndPlaySong);
+    this.props.onNextSong(this.props.onFindAndPlaySong);
   },
   render: function() {
     var inputStyle = {
@@ -209,13 +218,13 @@ var SideNav = React.createClass({
         <PlaylistList playlists={this.props.playlists}
                       currentPlaylist={this.props.currentPlaylist}
                       switchPlaylist={this.switchPlaylist} />
-        <AudioPlayer audioSrc={this.state.audioSrc}
+        <AudioPlayer audioSrc={this.props.audioSrc}
                      nextSong={this.nextSong} />
 
-        <div style={this.state.audioSrc ? songInfoStyle : hidden}>
-          <img src={this.state.artworkUrl} style={albumImgStyle}></img>
-          <div>{this.state.title}</div>
-          <div>{this.state.artist}</div>
+        <div style={this.props.audioSrc ? songInfoStyle : hidden}>
+          <img src={this.props.artworkUrl} style={albumImgStyle}></img>
+          <div>{this.props.title}</div>
+          <div>{this.props.artist}</div>
         </div>
       </div>
     );
@@ -501,6 +510,11 @@ var MainView = React.createClass({
       maxNumAlbums: 0
     };
   },
+  componentWillReceiveProps: function(newProps) {
+    if (this.props.playlist
+        && this.props.playlist.maxIndex !== newProps.playlist.maxIndex)
+      this.setState({ scrollIndex: newProps.playlist.maxIndex });
+  },
   componentDidMount: function() {
     var windowWidth = $('#pndra-albumSelect').width();
     this.setState({
@@ -513,47 +527,35 @@ var MainView = React.createClass({
     var newMaxNumAlbums = Math.floor((windowWidth - this.ALBUMPADDING)
                                      / this.ALBUMWIDTH);
     if (newMaxNumAlbums !== this.maxNumAlbums) {
-      this.setState({
-        maxNumAlbums: newMaxNumAlbums
-      });
+      this.setState({ maxNumAlbums: newMaxNumAlbums });
     }
-  },
-  componentWillReceiveProps: function(newProps) {
-    this.setState({
-      scrollIndex: newProps.playlist.index
-    });
   },
   scrollLeft: function() {
-    if (this.state.scrollIndex - this.state.maxNumAlbums + 1 > 0) {
-      this.setState({
-        scrollIndex: this.state.scrollIndex - 1
-      });
-    }
+    if (this.state.scrollIndex - this.state.maxNumAlbums + 1 > 0)
+      this.setState({ scrollIndex: this.state.scrollIndex - 1 });
   },
   scrollRight: function() {
-    if (this.state.scrollIndex < this.props.playlist.index) {
-      this.setState({
-        scrollIndex: this.state.scrollIndex + 1
-      });
-    }
+    if (this.state.scrollIndex < this.props.playlist.maxIndex)
+      this.setState({ scrollIndex: this.state.scrollIndex + 1 });
   },
   render: function() {
-    var hidden = {
-      visibility: 'hidden'
-    };
     var albums = [];
     if (this.props.playlist) {
       var index = this.state.scrollIndex;
       var albumLength = Math.min(this.state.maxNumAlbums, index + 1);
       var songName;
+      var album;
       for (var i = 0; i < albumLength; i++) {
         songName = this.props.playlist.songs[(index+1) - albumLength + i];
-        if (songName in this.props.songMetadata)
-          albums.push(this.props.songMetadata[songName]);
+        if (songName in this.props.songMetadata) {
+          album = this.props.songMetadata[songName];
+          album.index = (index+1) - albumLength + i;
+          albums.push(album);
+        }
       }
 
       var showLeftButton = this.state.scrollIndex >= this.state.maxNumAlbums;
-      var showRightButton = this.state.scrollIndex < this.props.playlist.index;
+      var showRightButton = this.state.scrollIndex < this.props.playlist.maxIndex;
     }
     return (
       <div id='pndra-mainView'>
@@ -568,9 +570,11 @@ var MainView = React.createClass({
               glyph='chevron-left' />
           </ReactBootstrap.Button>
           <div id='pndra-albumList'>
-            {albums.map(function(album) {
+            {albums.map(function(album, i) {
               return (
-                <div className='pndra-album'>
+                <div className={this.props.playlist.index === album.index ?
+                                'pndra-album selected' : 'pndra-album'}
+                  onClick={this.props.onSelectSong.bind(this, album.index)}>
                   <img src={album.artworkUrl}></img>
                   <span className='albumText'>
                     <div>{album.title}</div>
@@ -578,7 +582,7 @@ var MainView = React.createClass({
                   </span>
                 </div>
               );
-            })}
+            }.bind(this))}
           </div>
           <ReactBootstrap.Button
             className='pndra-albumNav btn btn-default'

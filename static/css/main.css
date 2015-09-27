@@ -101,10 +101,20 @@ html, body {
   height: 130px;
 }
 
+#pndra-albumSelect .pndra-album.selected img {
+  position: 0 0 absolute;
+  width: 140px;
+  height: 140px;
+}
+
+
 #pndra-albumSelect .pndra-album .albumText {
   position: 150 0 absolute;
   width: 150px;
   height: 150px;
+}
+#pndra-albumSelect .pndra-album.selected .albumText {
+  font-weight: 1.1em;
 }
 
 #pndra-audioCanvasLeft {
