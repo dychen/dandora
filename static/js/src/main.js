@@ -4,7 +4,8 @@ var BACKGROUND_URL = 'http://www.pandora.com/static/valances/pandora/default/ski
 
 var COLORS = {
   darkblue: '#1c3f5b',
-  lightblue: '#465c7d'
+  lightblue: '#465c7d',
+  brightblue: '#accdff',
 };
 
 var SPINNER = new Spinner({ color: 'white' }).spin(document.getElementById('pndra-spinner'));
@@ -226,33 +227,15 @@ var SideNav = React.createClass({
 
 var PlaylistList = React.createClass({
   render: function() {
-    var ulStyle = {
-      height: 200,
-      width: 250,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'left',
-      justifyContent: 'flex-start',
-      listStyle: 'none',
-      overflow: 'scroll'
-    };
-    var liActive = {
-      fontWeight: 'bold',
-      padding: 5
-    };
-    var liStyle = {
-      padding: 5
-    };
     return (
       <div>
         <h4>Stations</h4>
-        <ul style={ulStyle}>
+        <ul id='pndra-stationList'>
           {this.props.playlists.map(function(playlist) {
             return (
-              <li style={this.props.currentPlaylist === playlist.name
-                         ? liActive : liStyle}
-                  onClick={this.props.switchPlaylist.bind(this, playlist.name)}
-                  className='hvr hvr-grow'>
+              <li onClick={this.props.switchPlaylist.bind(this, playlist.name)}
+                  className={this.props.currentPlaylist === playlist.name
+                             ? 'hvr hvr-grow active' : 'hvr hvr-grow'}>
                 {playlist.name}
               </li>
             );
@@ -448,45 +431,27 @@ var AudioPlayer = React.createClass({
     return m + ':' + s;
   },
   render: function() {
-    var buttonRowStyle = {
-      display: 'flex',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-around',
-      width: 250
-    };
-    var buttonStyle = {
-      color: 'white',
-      fontSize: '2.4em',
-      margin: 'auto'
-    };
-    var progressBarStyle = {
-      width: 250
-    };
     var playIcon = this.state.playing ? 'pause' : 'play';
     return (
       <div>
         <audio id='pndra-audio-player'>
         </audio>
-        {this.formatTime(this.state.currentPosition)}/{this.formatTime(this.state.duration)}
-        <ReactBootstrap.ProgressBar style={progressBarStyle} active now={this.getProgress()} />
-        <div style={buttonRowStyle}>
-          <ReactBootstrap.Glyphicon style={buttonStyle}
-                                    className='hvr'
+        {this.formatTime(this.state.currentPosition)}
+        / {this.formatTime(this.state.duration)}
+        <ReactBootstrap.ProgressBar className='pndra-progressBar'
+                                    active now={this.getProgress()} />
+        <div id='pndra-audioControl'>
+          <ReactBootstrap.Glyphicon className='hvr hvr-grow pndra-audioButton'
                                     glyph='thumbs-up' />
-          <ReactBootstrap.Glyphicon style={buttonStyle}
-                                    className='hvr'
+          <ReactBootstrap.Glyphicon className='hvr hvr-grow pndra-audioButton'
                                     glyph='thumbs-down' />
-          <ReactBootstrap.Glyphicon style={buttonStyle}
-                                    className='hvr'
+          <ReactBootstrap.Glyphicon className='hvr hvr-grow pndra-audioButton'
                                     glyph={playIcon}
                                     onClick={this.play} />
-          <ReactBootstrap.Glyphicon style={buttonStyle}
-                                    className='hvr'
+          <ReactBootstrap.Glyphicon className='hvr hvr-grow pndra-audioButton'
                                     glyph='fast-forward'
                                     onClick={this.handleSongEnded} />
-          <ReactBootstrap.Glyphicon style={buttonStyle}
-                                    className='hvr'
+          <ReactBootstrap.Glyphicon className='hvr hvr-grow pndra-audioButton'
                                     glyph='volume-up' />
         </div>
       </div>

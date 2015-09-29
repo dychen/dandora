@@ -53,6 +53,26 @@ html, body {
   width: 250px;
 }
 
+#pndra-stationList {
+  height: 200px;
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  align-items: left;
+  justify-content: flex-start;
+  list-style: none;
+  overflow: scroll;
+}
+
+#pndra-stationList li {
+  padding: 5px;
+}
+
+#pndra-stationList li.active {
+  color: #accdff;
+  font-weight: bold;
+}
+
 #pndra-sideNavAlbum {
   color: white;
   display: flex;
@@ -70,6 +90,28 @@ html, body {
   height: 100px;
   width: 100px;
   background-color: white;
+}
+
+#pndra-sideNavAlbum div {
+  text-align: center;
+}
+
+#pndra-progressBar {
+  width: 250px;
+}
+
+#pndra-audioControl {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  width: 250px;
+}
+
+#pndra-audioControl .pndra-audioButton {
+  color: white;
+  font-size: 2.4em;
+  margin: auto;
 }
 
 #pndra-mainView {
@@ -120,6 +162,7 @@ html, body {
 
 #pndra-albumSelect .pndra-album img {
   position: 0 0 absolute;
+  background-color: white;
   width: 130px;
   height: 130px;
 }
@@ -130,14 +173,14 @@ html, body {
   height: 140px;
 }
 
-
 #pndra-albumSelect .pndra-album .albumText {
   position: 150 0 absolute;
   width: 150px;
   height: 150px;
 }
-#pndra-albumSelect .pndra-album.selected .albumText {
-  font-weight: 1.1em;
+#pndra-albumSelect .pndra-album.selected .albumText div {
+  font-size: 1.1em;
+  color: #accdff;
 }
 
 #pndra-audioCanvasLeft {
