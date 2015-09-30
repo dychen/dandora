@@ -148,6 +148,40 @@ class PopularityRecommender(BaseRecommender):
 
 class CosineSimilarityRecommender(BaseRecommender):
     """
+    Strategy: Calculate the user-user and song-song locally weighted cosine
+    similarities as follows (for users or songs u, v):
+    w_uv = |u.v| / (||u||| |v||) where u.v is the dot product of the two
+                                 vectors and ||u|| and ||v|| are the L2 norms
+         = u & v / (len(u) len(v)) since elements in u, v are either 0 or 1,
+                                   where u & v is the set intersection
+    We want to parameterize the relative contributions of the vectors:
+         = u & v / (len(u)^alpha len(v)^(1-alpha))
+    And parameterize the contribution of each individual weight:
+    f(w_uv) = w_uv^q
+    Each w_uv is an element of the corresponding user-user or song-song weight
+    matrix M or N (respectively).
+
+    Then, to compute the score of song s for user u:
+    From the user-user weight matrix M (let U be the set of all users):
+    s_su = sum(for v in U != u: M_uv * I_vs)
+    For the song-song weight matrix N (let S be the set of all songs):
+    s_su = sum(for t in S != s: N_st * I_ut)
+    Where I_ij is 1 if user i has listened to song j and 0 otherwise.
+    At a high level: the user-based score sums over user-based similarity to
+    all other users who have listened to that song; the song-based score sums
+    over song-based similarity to all other songs that user has listened to.
+
+    Finally, the recommendation is given by the top 500 songs from mixing the
+    song-based and user-based models by taking the recommendations made by each
+    model with probability p for the song-based model and probability 1-p for
+    the user-based model.
+
+    The entire system is parameterized by alpha, q, p
+    The optimal parameters in the paper were:
+    Song model: alpha=0.15, q=3
+    User model: alpha=0.3, q=5
+    p=0.8
+
     Paper: http://www.ke.tu-darmstadt.de/events/PL-12/papers/08-aiolli.pdf
     """
 
@@ -155,9 +189,9 @@ class CosineSimilarityRecommender(BaseRecommender):
         t0 = time.time()
         data = self._load_dataset()
         t1 = Timer.log_elapsed_time('Loading training dataset', t0)
-        self.__users = self._get_ordered_users()[:10000]
+        self.__users = self._get_ordered_users()
         t2 = Timer.log_elapsed_time('Getting user list', t1)
-        self.__songs = self._get_ordered_songs()[:10000]
+        self.__songs = self._get_ordered_songs()
         t3 = Timer.log_elapsed_time('Getting song list', t2)
         self.__user_song_dict = self._get_user_song_dict(data)
         t4 = Timer.log_elapsed_time('Getting user-song mapping', t3)
@@ -225,6 +259,50 @@ class CosineSimilarityRecommender(BaseRecommender):
         self.__debug_similarities(user_similarities)
         self.__debug_similarities(song_similarities)
 
+class CosineSimilarityMapReduce(BaseRecommender):
+
+    def format_input(self, infile='kaggle_visible_evaluation_triplets.txt',
+                     outfile='song_users_visible_evaluation.txt'):
+        """
+        Helper function that rewrites the input format from:
+            "[user id] [song id] [listened count]\n"
+        To:
+            "[song id] [user id] [user id] [user id] ...\n"
+        Each song followed by all the users who listened to that song
+        """
+
+        data = self._load_dataset()
+
+        song_users = {}
+        for line in data:
+            user, song, _ = line.strip().split('\t')
+            if song in song_users:
+                song_users[song].add(user)
+            else:
+                song_users[song] = set([user])
+
+        with open(outfile, 'w') as fout:
+            for song, users in song_users.iteritems():
+                fout.write('%s %s\n' % (song, ' '.join(users)))
+
+    def map(self, separator='\t'):
+        """
+        Suppose we are calculating user-user similarity.
+        For each "song user user user ..." line:
+            emit ((user, user), song) for each pair of users
+        See mapper.py for implementation.
+        """
+        return
+
+    def reduce(self):
+        """
+        For each ((user, user), [songs]) tuple:
+            emit len(songs)
+        See reducer.py for implementation.
+        """
+        return
+
 if __name__=='__main__':
     #PopularityRecommender().run()
-    CosineSimilarityRecommender().run()
+    #CosineSimilarityRecommender().run()
+    CosineSimilarityMapReduce().format_input()
