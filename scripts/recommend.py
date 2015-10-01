@@ -406,92 +406,66 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
         else:
             Timer.log_elapsed_time('Computing song similarity', t0)
 
-    def __compute_scores(self, user_similarities, song_similarities):
-        """
-        For each user, compute the user-matrix scores for all songs, given by:
-            s_su = sum(for v in U != u: M_uv * I_vs)
-            For the user set U, user matrix M, listened-to matrix I
-        And the song-matrix scores for all songs, given by:
-            s_su = sum(for t in S != s: N_st * I_ut)
-            For the song set S, song matrix N, listened-to matrix I
-        """
-
-        def compute_score(user, song):
-#            user_score = sum(user_similarities[user][otheruser]
-            """
-            user_score = sum(1
-                             for otheruser in self._users
-                             if user != otheruser
-                                 and otheruser in self._user_song_dict
-                                 and song in self._user_song_dict[otheruser])
-            """
-#            song_score =sum(song_similarities[song][othersong]
-            score = 0
-            #for othersong in self._songs:
-            #    score += 1
-            """
-            song_score =sum(1
-                            for othersong in self._songs
-                            if song != othersong
-                                and user in self._user_song_dict
-                                and othersong in self._user_song_dict[user])
-            """
-
-        for i, user in enumerate(self._users):
-            print 'User %d/%d' % (i, len(self._users))
-            score = min(sum(1 for _ in self._songs) for _ in self._songs)
-            """
-            for song in self._songs:
-                score = 0
-                for othersong in self._songs:
-                    score += 1
-                #compute_score(user, song)
-            """
-            print score
-
     def recommend(self, userfile, songfile):
-
-        def compute_score(useridx):
-            print '%d/%d' % (useridx, len(self._users))
-            t0 = time.time()
-            # Songs the user has listened to
-            user_song_set = user_song_dict_idx[useridx]
-            song_scores = {}
-            for songidx in othersongidxs:
-                similar_songs = user_song_set & song_similarity_set[songidx]
-                score = 0.0
-                for othersongidx in similar_songs:
-                    score += song_similarities[songidx][othersongidx]
-                #if score > 0:
-                #    song_scores[songidx] = score
-
-            #print sorted(song_scores.values())
-            Timer.log_elapsed_time('song scores', t0)
-
-        """
-        @param outfile [str]: Name of the similarity file output from train().
-                              It should be the same in both the songs and the
-                              users model directories.
-        """
         t0 = time.time()
-
-        # Load user similarities and compute user scorers
-        user_scores = {}
-        """
-        with open(userfile) as fusers:
-            for line in fusers:
-                u1, u2, similarity = line.strip().split('\t')
-                if u1 in user_similarities:
-                    user_similarities[u1][u2] = float(similarity)
-                else:
-                    user_similarities[u1] = {}
-                    user_similarities[u1][u2] = float(similarity)
-        """
-        t1 = Timer.log_elapsed_time('Loaded sparse user similarity matrix', t0)
 
         song_index_map = {s: i for i, s in enumerate(self._songs)}
         user_index_map = {u: i for i, u in enumerate(self._users)}
 
+        with open('%s/data/train/%s' % (self._ROOT_DIR, self._DATA_FILE)) as f:
+            data = f.readlines()
+
+        user_song_dict_idx = {}
+        song_user_dict_idx = {}
+        for line in data:
+            user, song, _ = line.strip().split('\t')
+            useridx, songidx = user_index_map[user], song_index_map[song]
+            if useridx in user_song_dict_idx:
+                user_song_dict_idx[useridx].add(songidx)
+            else:
+                user_song_dict_idx[useridx] = set([songidx])
+            if songidx in song_user_dict_idx:
+                song_user_dict_idx[songidx].add(useridx)
+            else:
+                song_user_dict_idx[songidx] = set([useridx])
+
+        # Load user similarities
+        user_similarities = {}
+        with open(userfile) as fusers:
+            for line in fusers:
+                u1, u2, similarity = line.strip().split('\t')
+                u1idx, u2idx = user_index_map[u1], user_index_map[u2]
+                if u1 in user_similarities:
+                    user_similarities[u1idx][u2idx] = float(similarity)
+                else:
+                    user_similarities[u1idx] = {}
+                    user_similarities[u1idx][u2idx] = float(similarity)
+
+        t1 = Timer.log_elapsed_time('Loaded sparse user similarity matrix', t0)
+
+        # Compute user scores
+        otheruseridxs = user_similarities.keys()
+        user_similarity_set = dict(zip(user_similarities,
+                                   map(set, user_similarities.values())))
+        for songidx in xrange(len(self._songs)):
+            if songidx in song_user_dict_idx:
+                print '%d/%d' % (songidx, len(self._songs))
+                t0 = time.time()
+                # Users that have listened to the song
+                song_user_set = song_user_dict_idx[songidx]
+                user_scores = {}
+                for useridx in otheruseridxs:
+                    similar_users = song_user_set & user_similarity_set[useridx]
+                    score = 0.0
+                    for otheruseridx in similar_users:
+                        score += user_similarities[useridx][otheruseridx]
+                    if score > 0:
+                        user_scores[useridx] = score
+
+                print len(user_scores)
+                Timer.log_elapsed_time('user scores', t0)
+
+        # Load song similarities
         song_similarities = {}
         with open(songfile) as fsongs:
             for line in fsongs:
@@ -503,21 +477,9 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
                     song_similarities[s1idx] = {}
                     song_similarities[s1idx][s2idx] = float(similarity)
 
-        with open('%s/data/train/%s' % (self._ROOT_DIR, self._DATA_FILE)) as f:
-            data = f.readlines()
-
-        user_song_dict_idx = {}
-        for line in data:
-            user, song, _ = line.strip().split('\t')
-            useridx, songidx = user_index_map[user], song_index_map[song]
-            if useridx in user_song_dict_idx:
-                user_song_dict_idx[useridx].add(songidx)
-            else:
-                user_song_dict_idx[useridx] = set([songidx])
-
         Timer.log_elapsed_time('Loaded sparse song similarity matrix', t1)
 
-        # Load song similarities and compute song scores
+        # Compute song scores
         othersongidxs = song_similarities.keys()
         song_similarity_set = dict(zip(song_similarities,
                                    map(set, song_similarities.values())))
