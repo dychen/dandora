@@ -20,6 +20,19 @@ This is a publicly available dataset of song metadata. Instructions for download
 3. SSH into the instance and mount the volume
 4. `scp -i [private key pemfile] ubuntu@[public DNS hostname]:[/path/to/track_metadata.db]``
 
+###Hadoop
+To run the MapReduce job that calculates pairwise intersections:
+```
+$ hadoop jar /usr/local/Cellar/hadoop/2.7.1/libexec/share/hadoop/tools/lib/hadoop-streaming-2.7.1.jar \
+  -file scripts/mapper.py -mapper scripts/mapper.py \
+  -file scripts/reducer.py -reducer scripts/reducer.py \
+  -input song_users_visible_evaluation.txt -output data/models/usersim
+```
+To compute the locality-weighted cosine similarities:
+```
+$ python scripts/recommend.py # You can supply various command-line args
+```
+
 ###Dependencies
 ```
 Flask
@@ -31,6 +44,8 @@ Flask
 
 flask-sqlalchemy
 + SQLAlchemy
+
+requests
 ```
 
 ###Old/Unused

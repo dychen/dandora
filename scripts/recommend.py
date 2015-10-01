@@ -1,3 +1,4 @@
+import argparse
 import os
 import time
 
@@ -10,9 +11,12 @@ class Timer:
 
 class BaseRecommender:
     _ROOT_DIR = os.environ['ROOT_DIR']
+    _DATA_FOLDER = 'data/train'
+    _DATA_FILE = 'kaggle_visible_evaluation_triplets.txt'
 
-    def _load_dataset(self, filename='kaggle_visible_evaluation_triplets.txt'):
-        with open('%s/data/train/%s' % (self._ROOT_DIR, filename)) as f:
+    def _load_dataset(self, filepath=
+                      ('%s/%s/%s' % (_ROOT_DIR, _DATA_FOLDER, _DATA_FILE))):
+        with open(filepath) as f:
             return f.readlines()
 
     def _get_user_song_dict(self, data):
@@ -185,20 +189,21 @@ class CosineSimilarityRecommender(BaseRecommender):
     Paper: http://www.ke.tu-darmstadt.de/events/PL-12/papers/08-aiolli.pdf
     """
 
-    def __init__(self):
+    def __init__(self, filepath=None):
         t0 = time.time()
-        data = self._load_dataset()
+        data = (self._load_dataset(filepath) if filepath
+                else self._load_dataset())
         t1 = Timer.log_elapsed_time('Loading training dataset', t0)
-        self.__users = self._get_ordered_users()
+        self._users = self._get_ordered_users()
         t2 = Timer.log_elapsed_time('Getting user list', t1)
-        self.__songs = self._get_ordered_songs()
+        self._songs = self._get_ordered_songs()
         t3 = Timer.log_elapsed_time('Getting song list', t2)
-        self.__user_song_dict = self._get_user_song_dict(data)
+        self._user_song_dict = self._get_user_song_dict(data)
         t4 = Timer.log_elapsed_time('Getting user-song mapping', t3)
-        self.__song_user_dict = self._get_song_user_dict(data)
+        self._song_user_dict = self._get_song_user_dict(data)
         Timer.log_elapsed_time('Getting song-user mapping', t4)
 
-    def __cosine_similarity(self, u, v, alpha, q, foruser=False):
+    def __cosine_similarity(self, u, v, alpha, q, foruser=True):
         """
         @u, v [str]: Song or user ids
         @alpha [float]: Weighting parameter from 0.0 to 1.0, inclusive
@@ -211,7 +216,7 @@ class CosineSimilarityRecommender(BaseRecommender):
         @return [float] w_uv^q
         """
 
-        curr_dict = self.__user_song_dict if foruser else self.__song_user_dict
+        curr_dict = self._user_song_dict if foruser else self._song_user_dict
         if u in curr_dict and v in curr_dict:
             u_set = curr_dict[u]
             v_set = curr_dict[v]
@@ -220,7 +225,7 @@ class CosineSimilarityRecommender(BaseRecommender):
         return 0.0 # There are some songs that haven't been listened to. Set
                    # their similarity vectors to 0
 
-    def __iterate_model(self, alpha, q, foruser=False):
+    def __iterate_model(self, alpha, q, foruser=True):
         """
         @return [dict]: |user|x|user| map of user-user similarities or a
                         |song|x|song| map of song-song similarities
@@ -229,10 +234,10 @@ class CosineSimilarityRecommender(BaseRecommender):
               ... }
         """
         similarities = {}
-        curr_set = self.__users if foruser else self.__songs
+        curr_set = self._users if foruser else self._songs
         for i in xrange(len(curr_set)):
             similarities[curr_set[i]] = {}
-            #print '  Iteration: %d/%d %s' % (i, len(curr_set), curr_set[i])
+            print '    Iteration: %d/%d %s' % (i, len(curr_set), curr_set[i])
             for j in xrange(len(curr_set)):
                 if i != j:
                     similarities[curr_set[i]][curr_set[j]] = \
@@ -240,8 +245,12 @@ class CosineSimilarityRecommender(BaseRecommender):
                                                  alpha, q, foruser=foruser)
         return similarities
 
-    def __write_similarities(self):
-        return
+    def __write_similarities(self, similarities, outfile='similarities.txt'):
+        with open(outfile, 'w') as f:
+            for x1, x1similarities in similarities.iteritems():
+                for x2, x1x2sim in x1similarities.iteritems():
+                    if x1x2sim != 0:
+                        fout.write('%s\t%s\t%f\n' % (x1, x2, x1x2sim))
 
     def __debug_similarities(self, similarities):
         for x1, x1similarities in similarities.iteritems():
@@ -249,43 +258,89 @@ class CosineSimilarityRecommender(BaseRecommender):
                 if x1x2sim != 0:
                     print x1, x2, x1x2sim
 
-    def run(self):
+    def train(self, alpha=0.5, q=1, foruser=False, threshold=0):
+        print (('Training for %s with parameters:\n'
+                '  alpha=%g\n'
+                '  q=%d\n'
+                '  threshold=%d')
+                % ('users' if foruser else 'songs', alpha, q, threshold))
         t0 = time.time()
 
-        user_similarities = self.__iterate_model(0.5, 1, foruser=True)
-        t1 = Timer.log_elapsed_time('Computing user-user similarity', t0)
-        song_similarities = self.__iterate_model(0.5, 1, foruser=False)
-        t2 = Timer.log_elapsed_time('Computing song-song similarity', t1)
-        self.__debug_similarities(user_similarities)
-        self.__debug_similarities(song_similarities)
+        outfile = ('user-similarities_%g_%d_%d.txt' % (alpha, q, threshold)
+                   if foruser else
+                   'song-similarities_%g_%d_%d.txt' % (alpha, q, threshold))
+        similarities = self.__iterate_model(0.5, 1, foruser=foruser)
+        t1 = Timer.log_elapsed_time('Computing similarities', t0)
+        self.__write_similarities(similarities, outfile=outfile)
 
-class CosineSimilarityMapReduce(BaseRecommender):
+class CosineSimilarityMapReduce(CosineSimilarityRecommender):
 
-    def format_input(self, infile='kaggle_visible_evaluation_triplets.txt',
-                     outfile='song_users_visible_evaluation.txt'):
+    __USER_MODEL_FOLDER = 'data/models/usersim'
+    __SONG_MODEL_FOLDER = 'data/models/songsim'
+    __INFILE = 'part-00000'
+    __OUTFILE = 'similarities'
+
+    @classmethod
+    def format_input(cls, foruser=True,
+                     infile='kaggle_visible_evaluation_triplets.txt',
+                     outfile='mr_training'):
         """
         Helper function that rewrites the input format from:
+        For users:
             "[user id] [song id] [listened count]\n"
         To:
             "[song id] [user id] [user id] [user id] ...\n"
-        Each song followed by all the users who listened to that song
+        Each song followed by all the users who listened to that song. This
+        file is used in the MapReduce job to construct the sparse adjacency
+        list.
+
+        For songs:
+            "[user id] [song id] [listened count]\n"
+        To:
+            "[user id] [song id] [song id] [song id] ...\n"
+        Each user followed by all the songs that user listened to. This file is
+        used in the MapReduce job to construct the sparse adjacency list.
+
+        @param foruser [bool]: True to construct output for the user-user
+                               matrix, False to construct output for the
+                               song-song matrix.
+                               The naming is a bit counter-intuitive. The
+                               reasoning is if the output file is
+                               "[song] [user] [user] [user], ...", we use that
+                               in MapReduce to construct a count over all
+                               user-user pairs for that song, which gets us a
+                               user-user matrix.
         """
 
-        data = self._load_dataset()
+        print 'Formatting input'
 
-        song_users = {}
+        with open('%s/data/train/%s' % (cls._ROOT_DIR, infile)) as f:
+            data = f.readlines()
+
+        entity_map = {} # Either { user: [songs] } or { song: [users] }
         for line in data:
             user, song, _ = line.strip().split('\t')
-            if song in song_users:
-                song_users[song].add(user)
+            if foruser:
+                if song in entity_map:
+                    entity_map[song].add(user)
+                else:
+                    entity_map[song] = set([user])
             else:
-                song_users[song] = set([user])
+                if user in entity_map:
+                    entity_map[user].add(song)
+                else:
+                    entity_map[user] = set([song])
 
-        with open(outfile, 'w') as fout:
-            for song, users in song_users.iteritems():
-                fout.write('%s %s\n' % (song, ' '.join(users)))
+        outfilename = ('%s_song_users.txt' % outfile if foruser
+                       else '%s_user_songs.txt' % outfile)
 
-    def map(self, separator='\t'):
+        print 'Writing formatted input to %s' % outfilename
+
+        with open(outfilename, 'w') as fout:
+            for k, v in entity_map.iteritems():
+                fout.write('%s %s\n' % (k, ' '.join(v)))
+
+    def mapper(self, line):
         """
         Suppose we are calculating user-user similarity.
         For each "song user user user ..." line:
@@ -294,7 +349,7 @@ class CosineSimilarityMapReduce(BaseRecommender):
         """
         return
 
-    def reduce(self):
+    def reducer(self, key, values):
         """
         For each ((user, user), [songs]) tuple:
             emit len(songs)
@@ -302,7 +357,101 @@ class CosineSimilarityMapReduce(BaseRecommender):
         """
         return
 
+    def calculate_similarities(self, alpha=0.5, q=1, foruser=True, threshold=0,
+                               infilename=__INFILE, outfilename=__OUTFILE):
+        """
+        Calculates the cosine similarities for an intersection file with the
+        format:
+            "[user/song u id] [user/song v id] [|u & v|]"
+        As it reads similarities in the input file @infilename, it writes the
+        following to an output file @outfilename:
+            "[user/song u id] [user/song v id] [f(w_uv)]"
+        """
+
+        def cosine_similarity(curr_dict, u, v, intersection):
+            sim = (intersection /
+                   (len(curr_dict[u]) ** alpha *
+                    len(curr_dict[v]) ** (1 - alpha)))
+            return sim ** q
+
+        curr_dict = self._user_song_dict if foruser else self._song_user_dict
+        folder = (self.__USER_MODEL_FOLDER if foruser
+                  else self.__SONG_MODEL_FOLDER)
+        outfilename = '%s_%g_%d_%d.txt' % (outfilename, alpha, q, threshold)
+        infile = '%s/%s/%s' % (self._ROOT_DIR, folder, infilename)
+        outfile = '%s/%s/%s' % (self._ROOT_DIR, folder, outfilename)
+        with open(infile, 'r') as fin, open(outfile, 'w') as fout:
+            for line in fin:
+                linelist = line.split('\t')
+                id1, id2 = linelist[0].split(':')
+                count = int(linelist[1])
+                if count > threshold:
+                    sim = cosine_similarity(curr_dict, id1, id2, count)
+                    fout.write('%s\t%s\t%f\n' % (id1, id2, sim))
+
+    def train(self, alpha=0.5, q=1, foruser=True, threshold=0):
+        print (('Training for %s with parameters:\n'
+                '  alpha=%g\n'
+                '  q=%d\n'
+                '  threshold=%d')
+                % ('users' if foruser else 'songs', alpha, q, threshold))
+        t0 = time.time()
+
+        self.calculate_similarities(
+            alpha=alpha, q=q, foruser=foruser, threshold=threshold
+        )
+        if foruser:
+            Timer.log_elapsed_time('Computing user similarity', t0)
+        else:
+            Timer.log_elapsed_time('Computing song similarity', t0)
+
 if __name__=='__main__':
-    #PopularityRecommender().run()
-    #CosineSimilarityRecommender().run()
-    CosineSimilarityMapReduce().format_input()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--format-input', action='store_const', const=True,
+                        help='Format data for MR processing')
+    parser.add_argument('--train', action='store_const', const=True,
+                        help='Train the model')
+    parser.add_argument('--no-mr', action='store_const', const=True,
+                        help='Use the non-MR model')
+    parser.add_argument('--alpha', type=float,
+                        help='alpha tuning parameter in cosine computation')
+    parser.add_argument('--q', type=int,
+                        help='q tuning parameter in locality weighting')
+    parser.add_argument('--foruser', type=str,
+                        help=('[true/false] to only run for users or only for'
+                              ' songs (runs both if this is not supplied)'))
+    parser.add_argument('--threshold', type=int,
+                        help='set intersection magnitude cutoff')
+    parser.add_argument('--input', type=str,
+                        help='input file path')
+    args = parser.parse_args()
+
+    if args.format_input:
+        CosineSimilarityMapReduce.format_input(foruser=True)
+        CosineSimilarityMapReduce.format_input(foruser=False)
+
+    if args.train:
+        alpha = args.alpha if args.alpha else 0.5
+        q = args.q if args.q else 1
+        threshold = args.threshold if args.threshold else 0
+        if args.no_mr:
+            recommender = (CosineSimilarityRecommender(args.input)
+                           if args.input else CosineSimilarityRecommender())
+            if args.foruser and args.foruser.lower() == 'true':
+                recommender.train(
+                    alpha=alpha, q=q, foruser=True, threshold=threshold
+                )
+            if args.foruser and args.foruser.lower() != 'false':
+                recommender.train(
+                    alpha=alpha, q=q, foruser=False, threshold=threshold
+                )
+        else:
+            if args.foruser and args.foruser.lower() != 'true':
+                CosineSimilarityMapReduce().train(
+                    alpha=alpha, q=q, foruser=True, threshold=threshold
+                )
+            if args.foruser and args.foruser.lower() != 'false':
+                CosineSimilarityMapReduce().train(
+                    alpha=alpha, q=q, foruser=False, threshold=threshold
+                )
+
