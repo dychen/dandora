@@ -1,10 +1,11 @@
+import argparse
 import os
 import time
 from recommend import Timer
 
 ROOT_DIR = os.environ['ROOT_DIR']
 
-def evaluate(filename='submission.txt', TAU=500):
+def evaluate(filename, TAU=500):
 
     def calculate_mAP(predictions, actuals):
         """
@@ -63,7 +64,6 @@ def evaluate(filename='submission.txt', TAU=500):
                     average_precision += num_matches / k # Precision at k
             return average_precision / n_u
 
-        print 'Evaluating test data'
         print '    Loading listened map'
         listened_map = construct_listened_map(actuals) # Matrix M in the paper
         print len(listened_map)
@@ -84,7 +84,7 @@ def evaluate(filename='submission.txt', TAU=500):
         return sum(user_average_precisions) / len(user_average_precisions)
 
     t0 = time.time()
-    with open('%s/data/submissions/%s' % (ROOT_DIR, filename)) as f:
+    with open(filename) as f:
         submission_data = [line.strip().split(',') for line in f.readlines()]
     t1 = Timer.log_elapsed_time('Loaded submission data', t0)
     with open('%s/data/test/year1_valid_triplets_hidden.txt' % ROOT_DIR) as f:
@@ -95,5 +95,13 @@ def evaluate(filename='submission.txt', TAU=500):
     return mAP
 
 if __name__=='__main__':
-    mAP = evaluate('submission.txt')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--file', type=str, help='Input file path')
+    parser.add_argument('--tau', type=int, help='Number of recommendations')
+    args = parser.parse_args()
+
+    tau = args.tau if args.tau else 500
+    filename = args.file if args.file else 'submission.txt'
+
+    mAP = evaluate(filename, TAU=tau)
     print 'Mean average precision: %f' % mAP

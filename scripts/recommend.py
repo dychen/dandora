@@ -443,52 +443,54 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
             print '%d/%d' % (useridx, len(self._users))
             user_listened = user_song_dict_idx[useridx]
             user_recommendations = []
-            for _ in xrange(tau):
-                if useridx in user_model_scores:
-                    user_model_user_scores = user_model_scores[useridx]
-                    user_model_user_scores_list = [song for song in sorted(
-                        user_model_user_scores.keys(),
-                        key=lambda x: user_model_user_scores[x],
-                        reverse=True
-                    ) if song not in user_listened]
-                else:
-                    user_model_user_scores_list = []
-                if useridx in song_model_scores:
-                    song_model_user_scores = song_model_scores[useridx]
-                    song_model_user_scores_list = [song for song in sorted(
-                        song_model_user_scores.keys(),
-                        key=lambda x: song_model_user_scores[x],
-                        reverse=True
-                    ) if song not in user_listened]
-                else:
-                    song_model_user_scores_list = []
 
-                if song_model_user_scores_list or user_model_user_scores_list:
+            if useridx in user_model_scores:
+                user_model_user_scores = user_model_scores[useridx]
+                user_model_user_scores_list = [song for song in sorted(
+                    user_model_user_scores.keys(),
+                    key=lambda x: user_model_user_scores[x],
+                    reverse=True
+                ) if song not in user_listened]
+            else:
+                user_model_user_scores_list = []
+            if useridx in song_model_scores:
+                song_model_user_scores = song_model_scores[useridx]
+                song_model_user_scores_list = [song for song in sorted(
+                    song_model_user_scores.keys(),
+                    key=lambda x: song_model_user_scores[x],
+                    reverse=True
+                ) if song not in user_listened]
+            else:
+                song_model_user_scores_list = []
+
+            for _ in xrange(tau):
+                if song_model_user_scores_list and user_model_user_scores_list:
                     if random.random() < p:
-                        if song_model_user_scores_list:
-                            user_recommendations.append(
-                                song_model_user_scores_list.pop(0)
-                            )
-                        elif user_model_user_scores_list:
-                            user_recommendations.append(
-                                user_model_user_scores_list.pop(0)
-                            )
-                    elif random.random():
-                        if user_model_user_scores_list:
-                            user_recommendations.append(
-                                user_model_user_scores_list.pop(0)
-                            )
-                        elif song_model_user_scores_list:
-                            user_recommendations.append(
-                                song_model_user_scores_list.pop(0)
-                            )
+                        songidx = song_model_user_scores_list.pop(0)
+                        if songidx in user_model_user_scores_list:
+                            user_model_user_scores_list.remove(songidx)
+                    else:
+                        songidx = user_model_user_scores_list.pop(0)
+                        if songidx in song_model_user_scores_list:
+                            song_model_user_scores_list.remove(songidx)
+                    user_recommendations.append(songidx)
+                elif song_model_user_scores_list:
+                    user_recommendations.append(
+                        song_model_user_scores_list.pop(0)
+                    )
+                elif user_model_user_scores_list:
+                    user_recommendations.append(
+                        user_model_user_scores_list.pop(0)
+                    )
                 else:
                     break
             # Fill the remaining with popular song recommendations
-            user_recommendations = (
-                user_recommendations
-                + popular_songs[:tau-len(user_recommendations)][:]
-            )
+            popular_songs_copy = popular_songs[:]
+            user_recommendations_current_set = set(user_recommendations)
+            while len(user_recommendations) < tau:
+                nextsongidx = popular_songs_copy.pop(0)
+                if nextsongidx not in user_recommendations_current_set:
+                    user_recommendations.append(nextsongidx)
             recommendations.append(user_recommendations)
             tloop = Timer.log_elapsed_time('recommendations', tloop)
         return recommendations
@@ -584,7 +586,6 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
         for songidx in xrange(len(self._songs)):
             if songidx in song_user_dict_idx:
                 print '%d/%d' % (songidx, len(self._songs))
-                t0 = time.time()
                 # Users that have listened to the song
                 song_user_set = song_user_dict_idx[songidx]
                 for useridx in otheruseridxs:
@@ -625,7 +626,6 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
         tloop = time.time()
         for useridx in xrange(len(self._users)):
             print '%d/%d' % (useridx, len(self._users))
-            t0 = time.time()
             # Songs the user has listened to
             user_song_set = user_song_dict_idx[useridx]
             for songidx in othersongidxs:
