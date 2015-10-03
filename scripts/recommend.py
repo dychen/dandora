@@ -208,7 +208,7 @@ class CosineSimilarityRecommender(BaseRecommender):
         self._song_user_dict = self._get_song_user_dict(data)
         Timer.log_elapsed_time('Getting song-user mapping', t4)
 
-    def __cosine_similarity(self, u, v, alpha, q, foruser=True):
+    def __cosine_similarity(self, curr_dict, u, v, alpha, q, foruser=True):
         """
         @u, v [str]: Song or user ids
         @alpha [float]: Weighting parameter from 0.0 to 1.0, inclusive
@@ -221,7 +221,6 @@ class CosineSimilarityRecommender(BaseRecommender):
         @return [float] w_uv^q
         """
 
-        curr_dict = self._user_song_dict if foruser else self._song_user_dict
         if u in curr_dict and v in curr_dict:
             u_set = curr_dict[u]
             v_set = curr_dict[v]
@@ -230,8 +229,9 @@ class CosineSimilarityRecommender(BaseRecommender):
         return 0.0 # There are some songs that haven't been listened to. Set
                    # their similarity vectors to 0
 
-    def __iterate_model(self, alpha, q, foruser=True):
+    def __iterate_model(self, alpha, q, foruser=True, threshold=0):
         """
+        UNUSED - too slow
         @return [dict]: |user|x|user| map of user-user similarities or a
                         |song|x|song| map of song-song similarities
             { [u/s id]: { [u/s id]: [w_01], [u/s id]: [w_02], ... },
@@ -239,15 +239,69 @@ class CosineSimilarityRecommender(BaseRecommender):
               ... }
         """
         similarities = {}
+        curr_dict = self._user_song_dict if foruser else self._song_user_dict
         curr_set = self._users if foruser else self._songs
+        other_set = self._songs if foruser else self._users
         for i in xrange(len(curr_set)):
             similarities[curr_set[i]] = {}
             print '    Iteration: %d/%d %s' % (i, len(curr_set), curr_set[i])
+
             for j in xrange(len(curr_set)):
-                if i != j:
-                    similarities[curr_set[i]][curr_set[j]] = \
-                        self.__cosine_similarity(curr_set[i], curr_set[j],
-                                                 alpha, q, foruser=foruser)
+                u, v = curr_set[i], curr_set[j]
+                if (i != j and u in curr_dict and v in curr_dict
+                    and len(curr_dict[u] & curr_dict[v]) > threshold):
+
+                    u_set = curr_dict[u]
+                    v_set = curr_dict[v]
+                    similarity = (
+                        len(u_set & v_set) /
+                        (len(u_set) ** alpha * len(v_set) ** (1 - alpha))
+                    ) ** q
+                    similarities[curr_set[i]][curr_set[j]] = similarity
+        return similarities
+
+    def __iterate_model_fast(self, alpha, q, foruser=True, threshold=0):
+        """
+        Basically, a serial version of the MR algorithm.
+        @return [dict]: |user|x|user| map of user-user similarities or a
+                        |song|x|song| map of song-song similarities
+            { [u/s id]: { [u/s id]: [w_01], [u/s id]: [w_02], ... },
+              [u/s id]: { [u/s id]: [w_10], [u/s id]: [w_12], ... },
+              ... }
+        """
+        curr_dict = self._user_song_dict if foruser else self._song_user_dict
+        other_dict = self._song_user_dict if foruser else self._user_song_dict
+        intersections = {}
+        similarities = {}
+        count, dictlen = 0, len(other_dict)
+        for entityid, related in other_dict.iteritems():
+            if count % 10000 == 0:
+                print count, dictlen
+            relatedlist = list(related)
+            for i in xrange(len(relatedlist)):
+                for j in xrange(len(relatedlist)):
+                    if i != j:
+                        if (relatedlist[i], relatedlist[j]) in intersections:
+                            intersections[(relatedlist[i], relatedlist[j])] += 1
+                        else:
+                            intersections[(relatedlist[i], relatedlist[j])] = 1
+            count += 1
+        count, dictlen = 0, len(other_dict)
+        for itempair, count in intersections.iteritems():
+            if count % 10000 == 0:
+                print count, dictlen
+            if count > threshold:
+                item1, item2 = itempair
+                item1len = len(curr_dict[item1])
+                item2len = len(curr_dict[item2])
+                similarity = (count
+                              / (item1len ** alpha * item2len ** (1 - alpha))
+                              ** q)
+                if item1 in similarities:
+                    similarities[item1][item2] = similarity
+                else:
+                    similarities[item1] = { item2: similarity }
+            count += 1
         return similarities
 
     def __write_similarities(self, similarities, outfile='similarities.txt'):
@@ -255,7 +309,7 @@ class CosineSimilarityRecommender(BaseRecommender):
             for x1, x1similarities in similarities.iteritems():
                 for x2, x1x2sim in x1similarities.iteritems():
                     if x1x2sim != 0:
-                        fout.write('%s\t%s\t%f\n' % (x1, x2, x1x2sim))
+                        f.write('%s\t%s\t%f\n' % (x1, x2, x1x2sim))
 
     def __debug_similarities(self, similarities):
         for x1, x1similarities in similarities.iteritems():
@@ -274,7 +328,10 @@ class CosineSimilarityRecommender(BaseRecommender):
         outfile = ('user-similarities_%g_%d_%d.txt' % (alpha, q, threshold)
                    if foruser else
                    'song-similarities_%g_%d_%d.txt' % (alpha, q, threshold))
-        similarities = self.__iterate_model(alpha, q, foruser=foruser)
+        #similarities = self.__iterate_model(alpha, q, foruser=foruser,
+        #                                    threshold=threshold)
+        similarities = self.__iterate_model_fast(alpha, q, foruser=foruser,
+                                                 threshold=threshold)
         t1 = Timer.log_elapsed_time('Computing similarities', t0)
         self.__write_similarities(similarities, outfile=outfile)
 
@@ -286,9 +343,7 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
     __OUTFILE = 'similarities'
 
     @classmethod
-    def format_input(cls, foruser=True,
-                     infile='kaggle_visible_evaluation_triplets.txt',
-                     outfile='mr_training'):
+    def format_input(cls, infile, outfile, foruser=True):
         """
         Helper function that rewrites the input format from:
         For users:
@@ -319,7 +374,7 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
 
         print 'Formatting input'
 
-        with open('%s/data/train/%s' % (cls._ROOT_DIR, infile)) as f:
+        with open(infile) as f:
             data = f.readlines()
 
         entity_map = {} # Either { user: [songs] } or { song: [users] }
@@ -687,8 +742,10 @@ if __name__=='__main__':
     args = parser.parse_args()
 
     if args.format_input:
-        CosineSimilarityMapReduce.format_input(foruser=True)
-        CosineSimilarityMapReduce.format_input(foruser=False)
+        CosineSimilarityMapReduce.format_input(args.input, args.output,
+                                               foruser=True)
+        CosineSimilarityMapReduce.format_input(args.input, args.output,
+                                               foruser=False)
 
     if args.train:
         alpha = args.alpha if args.alpha else 0.5
@@ -697,20 +754,24 @@ if __name__=='__main__':
         if args.no_mr:
             recommender = (CosineSimilarityRecommender(args.input)
                            if args.input else CosineSimilarityRecommender())
-            if args.foruser and args.foruser.lower() == 'true':
-                recommender.train(alpha=alpha, q=q, foruser=True)
-            if args.foruser and args.foruser.lower() != 'false':
-                recommender.train(alpha=alpha, q=q, foruser=False)
         else:
             recommender = CosineSimilarityMapReduce()
-            if args.foruser and args.foruser.lower() != 'true':
+        if args.foruser:
+            if args.foruser.lower() == 'true':
                 recommender.train(
                     alpha=alpha, q=q, foruser=True, threshold=threshold
                 )
-            if args.foruser and args.foruser.lower() != 'false':
+            elif args.foruser.lower() == 'false':
                 recommender.train(
                     alpha=alpha, q=q, foruser=False, threshold=threshold
                 )
+        else:
+            recommender.train(
+                alpha=alpha, q=q, foruser=True, threshold=threshold
+            )
+            recommender.train(
+                alpha=alpha, q=q, foruser=False, threshold=threshold
+            )
 
     if args.recommend and args.usersim_file and args.songsim_file:
         p = args.p if args.p else 0.5

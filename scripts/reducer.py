@@ -16,4 +16,4 @@ def main(threshold=0, separator='\t'):
             print '%s%s%d' % (usertup, separator, count)
 
 if __name__=='__main__':
-    main(threshold=1)
+    main()
