@@ -466,6 +466,135 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
         else:
             Timer.log_elapsed_time('Computing song similarity', t0)
 
+    def score(self, userfile, songfile, infile=None):
+        """
+        Scores all nonzero user-song pairs for both the user and song models.
+        To compute the score of song s for user u:
+        From the user-user weight matrix M (let U be the set of all users):
+            s_su = sum(for v in U != u: M_uv * I_vs)
+        For the song-song weight matrix N (let S be the set of all songs):
+            s_su = sum(for t in S != s: N_st * I_ut)
+        Where I_ij is 1 if user i has listened to song j and 0 otherwise.
+        At a high level: the user-based score sums over user-based similarity
+        to all other users who have listened to that song; the song-based score
+        sums over song-based similarity to all other songs that user has
+        listened to.
+        For performance reasons, for each user in the user-user similarity
+        matrix, we precompute the set intersection of users who have listened
+        to the song and users similar to that user, and sum over the weights of
+        that set (and likewise for the song-song simlarity matrix).
+
+        @param userfile [str]: File with pre-computed user model weights.
+        @param songfile [str]: File with pre-computed song model weights.
+        """
+
+
+        t0 = time.time()
+
+        song_index_map = {s: i for i, s in enumerate(self._songs)}
+        user_index_map = {u: i for i, u in enumerate(self._users)}
+
+        infile = (infile if infile else
+                  ('%s/data/train/%s' % (self._ROOT_DIR, self._DATA_FILE)))
+        with open(infile) as f:
+            data = f.readlines()
+
+        # Map users and songs to integer indexes
+        user_song_dict_idx = {}
+        song_user_dict_idx = {}
+        for line in data:
+            user, song, _ = line.strip().split('\t')
+            useridx, songidx = user_index_map[user], song_index_map[song]
+            if useridx in user_song_dict_idx:
+                user_song_dict_idx[useridx].add(songidx)
+            else:
+                user_song_dict_idx[useridx] = set([songidx])
+            if songidx in song_user_dict_idx:
+                song_user_dict_idx[songidx].add(useridx)
+            else:
+                song_user_dict_idx[songidx] = set([useridx])
+
+        # Load user similarities
+        user_similarities = {}
+        with open(userfile) as fusers:
+            for line in fusers:
+                u1, u2, similarity = line.strip().split('\t')
+                u1idx, u2idx = user_index_map[u1], user_index_map[u2]
+                if u1idx in user_similarities:
+                    user_similarities[u1idx][u2idx] = float(similarity)
+                else:
+                    user_similarities[u1idx] = { u2idx: float(similarity) }
+
+        t1 = Timer.log_elapsed_time('Loaded sparse user similarity matrix', t0)
+
+        # Compute user scores
+        otheruseridxs = user_similarities.keys()
+        user_similarity_set = dict(zip(user_similarities,
+                                   map(set, user_similarities.values())))
+        user_model_scores = {}
+        tloop = time.time()
+        for songidx in xrange(len(self._songs)):
+            if songidx in song_user_dict_idx:
+                print '%d/%d' % (songidx, len(self._songs))
+                # Users that have listened to the song
+                song_user_set = song_user_dict_idx[songidx]
+                for useridx in otheruseridxs:
+                    similar_users = song_user_set & user_similarity_set[useridx]
+                    score = 0.0
+                    for otheruseridx in similar_users:
+                        score += user_similarities[useridx][otheruseridx]
+                    if score > 0:
+                        if useridx in user_model_scores:
+                            user_model_scores[useridx][songidx] = score
+                        else:
+                            user_model_scores[useridx] = { songidx: score }
+
+                tloop = Timer.log_elapsed_time('user scores', tloop)
+
+        t2 = Timer.log_elapsed_time('Computed user model scores', t1)
+
+        # Load song similarities
+        song_similarities = {}
+        with open(songfile) as fsongs:
+            for line in fsongs:
+                s1, s2, similarity = line.strip().split('\t')
+                s1idx, s2idx = song_index_map[s1], song_index_map[s2]
+                if s1idx in song_similarities:
+                    song_similarities[s1idx][s2idx] = float(similarity)
+                else:
+                    song_similarities[s1idx] = { s2idx: float(similarity) }
+
+        t3 = Timer.log_elapsed_time('Loaded sparse song similarity matrix', t2)
+
+        # Compute song scores
+        othersongidxs = song_similarities.keys()
+        song_similarity_set = dict(zip(song_similarities,
+                                   map(set, song_similarities.values())))
+        song_model_scores = {}
+        tloop = time.time()
+        for useridx in xrange(len(self._users)):
+            print '%d/%d' % (useridx, len(self._users))
+            # Songs the user has listened to
+            if useridx in user_song_dict_idx:
+                user_song_set = user_song_dict_idx[useridx]
+                for songidx in othersongidxs:
+                    similar_songs = user_song_set & song_similarity_set[songidx]
+                    score = 0.0
+                    for othersongidx in similar_songs:
+                        score += song_similarities[songidx][othersongidx]
+                    if score > 0:
+                        if useridx in song_model_scores:
+                            song_model_scores[useridx][songidx] = score
+                        else:
+                            song_model_scores[useridx] = { songidx: score }
+
+            tloop = Timer.log_elapsed_time('song scores', tloop)
+
+        t4 = Timer.log_elapsed_time('Computed song model scores', t3)
+
+        self.__save_model_scores(user_model_scores, userfile)
+        self.__save_model_scores(song_model_scores, songfile)
+
     def __save_model_scores(self, model_scores, similarity_filename):
         """
         Saves a score dictionary:
@@ -481,6 +610,23 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
                                              for songidx, score
                                              in user_scores.iteritems()])
                 f.write("%s\t%s\n" % (useridx, user_scores_str))
+
+    def __load_model_scores(self, filename):
+        """
+        Loads a file in the format:
+            "[useridx]\t[songidx]:score\t[songidx]:score...\n"
+        And return the corresponding dictionary:
+            { [useridx]: { [songidx]: score } }
+        """
+        model_scores = {}
+        with open(filename) as f:
+            for line in f:
+                linearr = line.strip().split('\t')
+                useridx, scores = (linearr[0],
+                                   [x.split(':') for x in linearr[1:]])
+                model_scores[useridx] = { songidx: float(score)
+                                          for songidx, score in scores}
+        return model_scores
 
     def __generate_recommendations(self, user_model_scores, song_model_scores,
                                    user_song_dict_idx, p=0.5, tau=500):
@@ -580,37 +726,18 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
                 f.write('%s\n' % ','.join([self._users[useridx]]
                                           + song_recommendations))
 
-    def recommend(self, userfile, songfile, p=0.5, tau=500,
-                  output='./submissions.txt', infile=None):
+    def recommend(self, user_scores_file, song_scores_file, p=0.5, tau=500,
+                  output='./submission.txt', infile=None):
         """
-        Scores all nonzero user-song pairs for both the user and song models.
-        To compute the score of song s for user u:
-        From the user-user weight matrix M (let U be the set of all users):
-            s_su = sum(for v in U != u: M_uv * I_vs)
-        For the song-song weight matrix N (let S be the set of all songs):
-            s_su = sum(for t in S != s: N_st * I_ut)
-        Where I_ij is 1 if user i has listened to song j and 0 otherwise.
-        At a high level: the user-based score sums over user-based similarity
-        to all other users who have listened to that song; the song-based score
-        sums over song-based similarity to all other songs that user has
-        listened to.
-        For performance reasons, for each user in the user-user similarity
-        matrix, we precompute the set intersection of users who have listened
-        to the song and users similar to that user, and sum over the weights of
-        that set (and likewise for the song-song simlarity matrix).
-
+        Constructs a recommendation file of the top @tau songs for each user.
         To recommend, we take the scores and choose between recommendations
         given by the user model and the song model with the probability
         parameter @p (see __generate_recommendations() for more details).
 
-        @param userfile [str]: File with pre-computed user model weights.
-        @param songfile [str]: File with pre-computed song model weights.
         @param p [float]: Probability of selecting the user model
                           recommendation.
         @param tau [int]: Total number of recommendations per user.
-        @param output [str]: Output file.
         """
-
 
         t0 = time.time()
 
@@ -623,7 +750,6 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
             data = f.readlines()
 
         user_song_dict_idx = {}
-        song_user_dict_idx = {}
         for line in data:
             user, song, _ = line.strip().split('\t')
             useridx, songidx = user_index_map[user], song_index_map[song]
@@ -631,100 +757,17 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
                 user_song_dict_idx[useridx].add(songidx)
             else:
                 user_song_dict_idx[useridx] = set([songidx])
-            if songidx in song_user_dict_idx:
-                song_user_dict_idx[songidx].add(useridx)
-            else:
-                song_user_dict_idx[songidx] = set([useridx])
 
-        # Load user similarities
-        user_similarities = {}
-        with open(userfile) as fusers:
-            for line in fusers:
-                u1, u2, similarity = line.strip().split('\t')
-                u1idx, u2idx = user_index_map[u1], user_index_map[u2]
-                if u1idx in user_similarities:
-                    user_similarities[u1idx][u2idx] = float(similarity)
-                else:
-                    user_similarities[u1idx] = { u2idx: float(similarity) }
-
-        t1 = Timer.log_elapsed_time('Loaded sparse user similarity matrix', t0)
-
-        # Compute user scores
-        otheruseridxs = user_similarities.keys()
-        user_similarity_set = dict(zip(user_similarities,
-                                   map(set, user_similarities.values())))
-        user_model_scores = {}
-        tloop = time.time()
-        for songidx in xrange(len(self._songs)):
-            if songidx in song_user_dict_idx:
-                print '%d/%d' % (songidx, len(self._songs))
-                # Users that have listened to the song
-                song_user_set = song_user_dict_idx[songidx]
-                for useridx in otheruseridxs:
-                    similar_users = song_user_set & user_similarity_set[useridx]
-                    score = 0.0
-                    for otheruseridx in similar_users:
-                        score += user_similarities[useridx][otheruseridx]
-                    if score > 0:
-                        if useridx in user_model_scores:
-                            user_model_scores[useridx][songidx] = score
-                        else:
-                            user_model_scores[useridx] = { songidx: score }
-
-                tloop = Timer.log_elapsed_time('user scores', tloop)
-
-        t2 = Timer.log_elapsed_time('Computed user model scores', t1)
-
-        # Load song similarities
-        song_similarities = {}
-        with open(songfile) as fsongs:
-            for line in fsongs:
-                s1, s2, similarity = line.strip().split('\t')
-                s1idx, s2idx = song_index_map[s1], song_index_map[s2]
-                if s1idx in song_similarities:
-                    song_similarities[s1idx][s2idx] = float(similarity)
-                else:
-                    song_similarities[s1idx] = { s2idx: float(similarity) }
-
-        t3 = Timer.log_elapsed_time('Loaded sparse song similarity matrix', t2)
-
-        # Compute song scores
-        othersongidxs = song_similarities.keys()
-        song_similarity_set = dict(zip(song_similarities,
-                                   map(set, song_similarities.values())))
-        song_model_scores = {}
-        tloop = time.time()
-        for useridx in xrange(len(self._users)):
-            print '%d/%d' % (useridx, len(self._users))
-            # Songs the user has listened to
-            if useridx in user_song_dict_idx:
-                user_song_set = user_song_dict_idx[useridx]
-                for songidx in othersongidxs:
-                    similar_songs = user_song_set & song_similarity_set[songidx]
-                    score = 0.0
-                    for othersongidx in similar_songs:
-                        score += song_similarities[songidx][othersongidx]
-                    if score > 0:
-                        if useridx in song_model_scores:
-                            song_model_scores[useridx][songidx] = score
-                        else:
-                            song_model_scores[useridx] = { songidx: score }
-
-            tloop = Timer.log_elapsed_time('song scores', tloop)
-
-        t4 = Timer.log_elapsed_time('Computed song model scores', t3)
-
-        self.__save_model_scores(user_model_scores, userfile)
-        self.__save_model_scores(song_model_scores, songfile)
+        user_model_scores = self.__load_model_scores(user_scores_file)
+        song_model_scores = self.__load_model_scores(song_scores_file)
 
         recommendations = self.__generate_recommendations(user_model_scores,
                                                           song_model_scores,
                                                           user_song_dict_idx,
                                                           p, tau)
-        Timer.log_elapsed_time('Generated recommendations', t4)
+        Timer.log_elapsed_time('Generated recommendations', t0)
 
         self.__format_submission(recommendations, output)
-
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -732,6 +775,8 @@ if __name__=='__main__':
                         help='Format data for MR processing')
     parser.add_argument('--train', action='store_const', const=True,
                         help='Train the model')
+    parser.add_argument('--score', action='store_const', const=True,
+                        help='Generate user:song scores')
     parser.add_argument('--recommend', action='store_const', const=True,
                         help='Generate recommendations')
     parser.add_argument('--no-mr', action='store_const', const=True,
@@ -757,6 +802,10 @@ if __name__=='__main__':
                         help='User similarities file path')
     parser.add_argument('--songsim-file', type=str,
                         help='Song similarities file path')
+    parser.add_argument('--userscore-file', type=str,
+                        help='User score file path')
+    parser.add_argument('--songscore-file', type=str,
+                        help='Song score file path')
     args = parser.parse_args()
 
     if args.format_input:
@@ -792,19 +841,24 @@ if __name__=='__main__':
                 alpha=alpha, q=q, foruser=False, threshold=threshold
             )
 
-    if args.recommend and args.usersim_file and args.songsim_file:
-        p = args.p if args.p else 0.5
-        tau = args.tau if args.tau else 500
+    if args.score and args.usersim_file and args.songsim_file:
         recommender = (CosineSimilarityMapReduce(args.input)
                        if args.input else CosineSimilarityMapReduce())
-        if args.output:
-            if args.input:
-                recommender.recommend(args.usersim_file, args.songsim_file,
-                                      p=0.5, tau=tau, output=args.output,
-                                      infile=args.input)
-            else:
-                recommender.recommend(args.usersim_file, args.songsim_file,
-                                      p=0.5, tau=tau, output=args.output)
+        if args.input:
+            recommender.score(args.usersim_file, args.songsim_file,
+                              infile=args.input)
         else:
-            recommender.recommend(args.usersim_file, args.songsim_file,
-                                  p=0.5, tau=tau)
+            recommender.score(args.usersim_file, args.songsim_file)
+
+    if args.recommend and args.userscore_file and args.songscore_file:
+        p = args.p if args.p else 0.5
+        tau = args.tau if args.tau else 500
+        if args.output:
+            CosineSimilarityMapReduce().recommend(args.userscore_file,
+                                                  args.songscore_file,
+                                                  p=p, tau=tau,
+                                                  output=args.output)
+        else:
+            CosineSimilarityMapReduce().recommend(args.userscore_file,
+                                                  args.songscore_file,
+                                                  p=p, tau=tau)
