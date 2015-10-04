@@ -602,14 +602,15 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
         In the format:
             "[useridx]\t[songidx]:score\t[songidx]:score...\n"
         """
+        t0 = time.time()
         outfile = similarity_filename + '.scores'
-        print outfile
         with open(outfile, 'w') as f:
             for useridx, user_scores in model_scores.iteritems():
                 user_scores_str = '\t'.join(['%s:%s' % (songidx, score)
                                              for songidx, score
                                              in user_scores.iteritems()])
                 f.write("%s\t%s\n" % (useridx, user_scores_str))
+        Timer.log_elapsed_time('Saved model scores to %s' % outfile, t0)
 
     def __load_model_scores(self, filename):
         """
@@ -618,14 +619,17 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
         And return the corresponding dictionary:
             { [useridx]: { [songidx]: score } }
         """
+        t0 = time.time()
         model_scores = {}
         with open(filename) as f:
-            for line in f:
+            for i, line in enumerate(f):
                 linearr = line.strip().split('\t')
-                useridx, scores = (linearr[0],
-                                   [x.split(':') for x in linearr[1:]])
-                model_scores[useridx] = { songidx: float(score)
-                                          for songidx, score in scores}
+                useridx = int(linearr[0])
+                model_scores[useridx] = {}
+                for scorestr in linearr[1:]:
+                    songidx, score = scorestr.split(':')
+                    model_scores[useridx][int(songidx)] = float(score)
+        Timer.log_elapsed_time('Loaded model scores from %s' % filename, t0)
         return model_scores
 
     def __generate_recommendations(self, user_model_scores, song_model_scores,
