@@ -466,6 +466,22 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
         else:
             Timer.log_elapsed_time('Computing song similarity', t0)
 
+    def __save_model_scores(self, model_scores, similarity_filename):
+        """
+        Saves a score dictionary:
+            { [useridx]: { [songidx]: score } }
+        In the format:
+            "[useridx]\t[songidx]:score\t[songidx]:score...\n"
+        """
+        outfile = similarity_filename + '.scores'
+        print outfile
+        with open(outfile, 'w') as f:
+            for useridx, user_scores in model_scores.iteritems():
+                user_scores_str = '\t'.join(['%s:%s' % (songidx, score)
+                                             for songidx, score
+                                             in user_scores.iteritems()])
+                f.write("%s\t%s\n" % (useridx, user_scores_str))
+
     def __generate_recommendations(self, user_model_scores, song_model_scores,
                                    user_song_dict_idx, p=0.5, tau=500):
         """
@@ -565,7 +581,7 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
                                           + song_recommendations))
 
     def recommend(self, userfile, songfile, p=0.5, tau=500,
-                  output='./submissions.txt'):
+                  output='./submissions.txt', infile=None):
         """
         Scores all nonzero user-song pairs for both the user and song models.
         To compute the score of song s for user u:
@@ -601,7 +617,9 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
         song_index_map = {s: i for i, s in enumerate(self._songs)}
         user_index_map = {u: i for i, u in enumerate(self._users)}
 
-        with open('%s/data/train/%s' % (self._ROOT_DIR, self._DATA_FILE)) as f:
+        infile = (infile if infile else
+                  ('%s/data/train/%s' % (self._ROOT_DIR, self._DATA_FILE)))
+        with open(infile) as f:
             data = f.readlines()
 
         user_song_dict_idx = {}
@@ -624,11 +642,10 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
             for line in fusers:
                 u1, u2, similarity = line.strip().split('\t')
                 u1idx, u2idx = user_index_map[u1], user_index_map[u2]
-                if u1 in user_similarities:
+                if u1idx in user_similarities:
                     user_similarities[u1idx][u2idx] = float(similarity)
                 else:
-                    user_similarities[u1idx] = {}
-                    user_similarities[u1idx][u2idx] = float(similarity)
+                    user_similarities[u1idx] = { u2idx: float(similarity) }
 
         t1 = Timer.log_elapsed_time('Loaded sparse user similarity matrix', t0)
 
@@ -654,7 +671,6 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
                         else:
                             user_model_scores[useridx] = { songidx: score }
 
-                print len(user_model_scores)
                 tloop = Timer.log_elapsed_time('user scores', tloop)
 
         t2 = Timer.log_elapsed_time('Computed user model scores', t1)
@@ -665,11 +681,10 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
             for line in fsongs:
                 s1, s2, similarity = line.strip().split('\t')
                 s1idx, s2idx = song_index_map[s1], song_index_map[s2]
-                if s1 in song_similarities:
+                if s1idx in song_similarities:
                     song_similarities[s1idx][s2idx] = float(similarity)
                 else:
-                    song_similarities[s1idx] = {}
-                    song_similarities[s1idx][s2idx] = float(similarity)
+                    song_similarities[s1idx] = { s2idx: float(similarity) }
 
         t3 = Timer.log_elapsed_time('Loaded sparse song similarity matrix', t2)
 
@@ -682,22 +697,25 @@ class CosineSimilarityMapReduce(CosineSimilarityRecommender):
         for useridx in xrange(len(self._users)):
             print '%d/%d' % (useridx, len(self._users))
             # Songs the user has listened to
-            user_song_set = user_song_dict_idx[useridx]
-            for songidx in othersongidxs:
-                similar_songs = user_song_set & song_similarity_set[songidx]
-                score = 0.0
-                for othersongidx in similar_songs:
-                    score += song_similarities[songidx][othersongidx]
-                if score > 0:
-                    if useridx in song_model_scores:
-                        song_model_scores[useridx][songidx] = score
-                    else:
-                        song_model_scores[useridx] = { songidx: score }
+            if useridx in user_song_dict_idx:
+                user_song_set = user_song_dict_idx[useridx]
+                for songidx in othersongidxs:
+                    similar_songs = user_song_set & song_similarity_set[songidx]
+                    score = 0.0
+                    for othersongidx in similar_songs:
+                        score += song_similarities[songidx][othersongidx]
+                    if score > 0:
+                        if useridx in song_model_scores:
+                            song_model_scores[useridx][songidx] = score
+                        else:
+                            song_model_scores[useridx] = { songidx: score }
 
-            print len(song_model_scores)
             tloop = Timer.log_elapsed_time('song scores', tloop)
 
         t4 = Timer.log_elapsed_time('Computed song model scores', t3)
+
+        self.__save_model_scores(user_model_scores, userfile)
+        self.__save_model_scores(song_model_scores, songfile)
 
         recommendations = self.__generate_recommendations(user_model_scores,
                                                           song_model_scores,
@@ -755,7 +773,8 @@ if __name__=='__main__':
             recommender = (CosineSimilarityRecommender(args.input)
                            if args.input else CosineSimilarityRecommender())
         else:
-            recommender = CosineSimilarityMapReduce()
+            recommender = (CosineSimilarityMapReduce(args.input)
+                           if args.input else CosineSimilarityMapReduce())
         if args.foruser:
             if args.foruser.lower() == 'true':
                 recommender.train(
@@ -776,12 +795,16 @@ if __name__=='__main__':
     if args.recommend and args.usersim_file and args.songsim_file:
         p = args.p if args.p else 0.5
         tau = args.tau if args.tau else 500
+        recommender = (CosineSimilarityMapReduce(args.input)
+                       if args.input else CosineSimilarityMapReduce())
         if args.output:
-            CosineSimilarityMapReduce().recommend(args.usersim_file,
-                                                  args.songsim_file,
-                                                  p=0.5, tau=tau,
-                                                  output=args.output)
+            if args.input:
+                recommender.recommend(args.usersim_file, args.songsim_file,
+                                      p=0.5, tau=tau, output=args.output,
+                                      infile=args.input)
+            else:
+                recommender.recommend(args.usersim_file, args.songsim_file,
+                                      p=0.5, tau=tau, output=args.output)
         else:
-            CosineSimilarityMapReduce().recommend(args.usersim_file,
-                                                  args.songsim_file,
-                                                  p=0.5, tau=tau)
+            recommender.recommend(args.usersim_file, args.songsim_file,
+                                  p=0.5, tau=tau)
