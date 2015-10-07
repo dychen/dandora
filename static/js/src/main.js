@@ -126,22 +126,20 @@ var MainContainer = React.createClass({
     return (
       <div id='pndra-mainContainer' className='container'>
         <TopNav />
-        <div id='pndra-bodyContainer'>
-          <SideNav playlists={this.state.playlists}
-                   currentPlaylist={this.state.currentPlaylist}
-                   title={this.state.title}
-                   album={this.state.artist}
-                   artwork={this.state.artworkUrl}
-                   audioSrc={this.state.audioSrc}
-                   onSearchStation={this.onSearchStation}
-                   onFindAndPlaySong={this.onFindAndPlaySong}
-                   onSwitchPlaylist={this.onSwitchPlaylist}
-                   onNextSong={this.onNextSong} />
-          <MainView playlist={this.getPlaylistByName(this.state.currentPlaylist)}
-                    songMetadata={this.state.songMetadata}
-                    onFindAndPlaySong={this.onFindAndPlaySong}
-                    onSelectSong={this.onSelectSong} />
-        </div>
+        <SideNav playlists={this.state.playlists}
+                 currentPlaylist={this.state.currentPlaylist}
+                 title={this.state.title}
+                 album={this.state.artist}
+                 artwork={this.state.artworkUrl}
+                 audioSrc={this.state.audioSrc}
+                 onSearchStation={this.onSearchStation}
+                 onFindAndPlaySong={this.onFindAndPlaySong}
+                 onSwitchPlaylist={this.onSwitchPlaylist}
+                 onNextSong={this.onNextSong} />
+        <MainView playlist={this.getPlaylistByName(this.state.currentPlaylist)}
+                  songMetadata={this.state.songMetadata}
+                  onFindAndPlaySong={this.onFindAndPlaySong}
+                  onSelectSong={this.onSelectSong} />
       </div>
     );
   }
@@ -426,6 +424,8 @@ var AudioPlayer = React.createClass({
     var m = mTotal % 60;
     var h = Math.floor(mTotal / 60);
     if (h > 0) {
+      if (m < 10)
+        m = '0' + m;
       return h + ':' + m + ':' + s;
     }
     return m + ':' + s;
@@ -433,11 +433,11 @@ var AudioPlayer = React.createClass({
   render: function() {
     var playIcon = this.state.playing ? 'pause' : 'play';
     return (
-      <div>
+      <div id='pndra-audioPlayerContainer'>
         <audio id='pndra-audio-player'>
         </audio>
         {this.formatTime(this.state.currentPosition)}
-        / {this.formatTime(this.state.duration)}
+        &nbsp;/&nbsp;{this.formatTime(this.state.duration)}
         <ReactBootstrap.ProgressBar className='pndra-progressBar'
                                     active now={this.getProgress()} />
         <div id='pndra-audioControl'>

@@ -16,51 +16,55 @@ html, body {
 }
 
 #pndra-mainContainer {
+  position: absolute;
   height: 100%;
   width: 100%;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-height: 600px;
+  min-width: 1000px;
+  overflow: hidden;
+  padding: 0;
   /* display: 'flex', */
   /* flexFlow: 'row wrap', */
   background-image: url('http://www.pandora.com/static/valances/pandora/default/skin_background.jpg');
-  padding: 0;
 }
 
 #pndra-topNav {
   height: 30px;
+  top: 0;
+  left: 0;
+  right: 0;
   width: 100%;
   position: fixed;
   background-color: #1c3f5b;
 }
 
-#pndra-bodyContainer {
-  height: 100%;
-  width: 100%;
-}
-
 #pndra-sideNav {
-  padding-top: 30px; /* For top nav */
-  height: 100%;
+  position: absolute;
+  top: 30px;
+  left: 0;
+  bottom: 0;
+  min-height: 600px;
   width: 300px;
-  float: left;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-around;
   background-color: #465c7d;
   color: white;
+
+  text-align: center;
 }
 
 #pndra-createStationInput {
   width: 250px;
+  margin: 0 auto;
+  padding-top: 10px;
 }
 
 #pndra-stationList {
-  height: 200px;
-  width: 250px;
-  display: flex;
-  flex-direction: column;
-  align-items: left;
-  justify-content: flex-start;
-  list-style: none;
+  max-height: 250px;
+  width: 300px;
+  padding: 10px;
   overflow: scroll;
 }
 
@@ -73,13 +77,43 @@ html, body {
   font-weight: bold;
 }
 
+#pndra-audioPlayerContainer {
+  position: absolute;
+  bottom: 250px;
+}
+
+.pndra-progressBar {
+  width: 250px;
+  margin: 0 auto;
+}
+
+#pndra-audioControl {
+  width: 300px;
+  padding: 10px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+}
+
+#pndra-audioControl .pndra-audioButton {
+  color: white;
+  font-size: 2.0em;
+  margin: auto;
+}
+
 #pndra-sideNavAlbum {
+  height: 200px;
+  width: 300px;
+  padding: 10px;
+  position: absolute;
+  bottom: 0;
+
   color: white;
   display: flex;
   flex-direction: column;
   align-items: center;
-  height: 250px;
-  width: 250px;
 }
 
 #pndra-sideNavAlbum.album-hidden {
@@ -96,33 +130,18 @@ html, body {
   text-align: center;
 }
 
-#pndra-progressBar {
-  width: 250px;
-}
-
-#pndra-audioControl {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-around;
-  width: 250px;
-}
-
-#pndra-audioControl .pndra-audioButton {
-  color: white;
-  font-size: 2.4em;
-  margin: auto;
-}
-
 #pndra-mainView {
-  padding-top: 30px; /* For top nav */
-  padding-left: 300px; /* For side nav */
-  height: 100%;
-  width: 100%;
+  position: absolute;
+  top: 30px;
+  left: 300px;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
 }
 
 #pndra-albumSelect {
   padding: 50px;
+  padding-bottom: 0;
   width: 100%;
   height: 400px;
 
@@ -148,6 +167,7 @@ html, body {
   flex-direction: row;
   align-items: center;
   justifyContent: flex-start;
+  flex-shrink: 0;
   color: white;
 }
 
@@ -155,7 +175,7 @@ html, body {
   margin: 10px;
   padding: 5px;
   width: 140px;
-  height: 300px;
+  height: 100%;
   text-align: center;
   /* border: 1px solid white; */
 }
