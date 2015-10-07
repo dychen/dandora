@@ -198,25 +198,29 @@ var SideNav = React.createClass({
     };
     return (
       <div id='pndra-sideNav'>
-        <div id='pndra-createStationInput'>
-          <ReactBootstrap.Input
-            id='create-station-typeahead'
-            type='text'
-            placeholder='Create Station'
-            addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
+        <div id='pndra-sideNav-flexTop'>
+          <div id='pndra-createStationInput'>
+            <ReactBootstrap.Input
+              id='create-station-typeahead'
+              type='text'
+              placeholder='Create Station'
+              addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
+          </div>
+          <h4>Stations</h4>
+          <PlaylistList playlists={this.props.playlists}
+                        currentPlaylist={this.props.currentPlaylist}
+                        switchPlaylist={this.switchPlaylist} />
         </div>
 
-        <PlaylistList playlists={this.props.playlists}
-                      currentPlaylist={this.props.currentPlaylist}
-                      switchPlaylist={this.switchPlaylist} />
-        <AudioPlayer audioSrc={this.props.audioSrc}
-                     nextSong={this.nextSong} />
-
-        <div id='pndra-sideNavAlbum'
-          className={this.props.audioSrc ? '' : 'album-hidden'}>
-          <img src={this.props.artworkUrl}></img>
-          <div>{this.props.title}</div>
-          <div>{this.props.artist}</div>
+        <div id='pndra-sideNav-flexBottom'>
+          <AudioPlayer audioSrc={this.props.audioSrc}
+                       nextSong={this.nextSong} />
+          <div id='pndra-sideNavAlbum'
+            className={this.props.audioSrc ? '' : 'album-hidden'}>
+            <img src={this.props.artworkUrl}></img>
+            <div>{this.props.title}</div>
+            <div>{this.props.artist}</div>
+          </div>
         </div>
       </div>
     );
@@ -227,7 +231,6 @@ var PlaylistList = React.createClass({
   render: function() {
     return (
       <div>
-        <h4>Stations</h4>
         <ul id='pndra-stationList'>
           {this.props.playlists.map(function(playlist) {
             return (
@@ -433,7 +436,7 @@ var AudioPlayer = React.createClass({
   render: function() {
     var playIcon = this.state.playing ? 'pause' : 'play';
     return (
-      <div id='pndra-audioPlayerContainer'>
+      <div>
         <audio id='pndra-audio-player'>
         </audio>
         {this.formatTime(this.state.currentPosition)}
@@ -479,6 +482,10 @@ var MainView = React.createClass({
       maxNumAlbums: Math.floor((windowWidth - this.ALBUMPADDING)
                                 / this.ALBUMWIDTH)
     });
+    window.addEventListener('resize', this.handleResize);
+  },
+  componentWillUnmount: function() {
+    window.removeEventListener('resize', this.handleResize);
   },
   handleResize: function() {
     var windowWidth = $('#pndra-albumSelect').width();
