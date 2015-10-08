@@ -15,6 +15,7 @@ $ python # Initialize the local database
 
 ###Million Song Dataset (MSD)
 This is a publicly available dataset of song metadata. Instructions for downloading the dataset are [here](http://labrosa.ee.columbia.edu/millionsong/pages/getting-dataset). Since I'm just using this for a (song id: song name) mapping, I just need to access the metadata database, which comes as part of the full snapshot. To do this, I needed to:
+
 1. Provision a separate AWS instance (US East), set up a public/private key pair, and set up a public DNS hostname
 2. Create a new volume from the [existing snapshot](https://aws.amazon.com/datasets/million-song-dataset/)
 3. SSH into the instance and mount the volume
@@ -58,9 +59,9 @@ $ python scripts/recommend.py --score \
 ```
 To generate recommendations:
 ```
-$ python scripts/recommend.py --score \
-  --usersong-file data/models/usersim/similarities_0.3_5_0.txt.score \
-  --songsong-file data/models/songsim/similarities_0.15_3_0.txt.score
+$ python scripts/recommend.py --recommend \
+  --userscore-file data/models/usersim/similarities_0.3_5_0.txt.score \
+  --songscore-file data/models/songsim/similarities_0.15_3_0.txt.score
 ```
 To evaluate the recommendations (note: this expects the validation set file `year1_valid_triplets_hidden` in the folder `data/test`)
 ```
@@ -71,7 +72,8 @@ Results:
 p=1.0 0.118594
 p=0.9 0.116871
 p=0.8 0.114447
-p=0.5
+p=0.5 0.104069
+p=0.0 0.104282
 ```
 
 ###Dependencies
@@ -87,6 +89,10 @@ flask-sqlalchemy
 + SQLAlchemy
 
 requests
+
+Flask-OAuth
++ httplib2
++ oauth2
 ```
 
 ###Old/Unused
