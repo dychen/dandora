@@ -123,6 +123,10 @@ def playlist():
             DB_SESSION.delete(playlist)
             DB_SESSION.commit()
 
+    if not is_logged_in():
+        response = jsonify({ 'error': 'Not logged in' })
+        response.status_code = 401
+        return response
     user = get_current_user()
 
     if request.method == 'POST':

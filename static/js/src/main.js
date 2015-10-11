@@ -33,15 +33,28 @@ var MainContainer = React.createClass({
        *   ...
        * }
        */
-      songMetadata: {}
+      songMetadata: {},
+      user: '',
+      title: '',
+      artist: '',
+      artworkUrl: '',
+      audioSrc: ''
     };
   },
   componentDidMount: function() {
     SPINNER.spin(document.getElementById('pndra-spinner'));
-    $.get('/api/playlists', function(response) {
+    $.get('/api/user', function(response) {
+      this.setState({ user: response.username });
+    }.bind(this));
+
+    var response = $.get('/api/playlists', function(response) {
       this.setState({ playlists: response.data });
       SPINNER.stop();
     }.bind(this));
+    response.fail(function(jqXHR, textStatus, error) {
+      SPINNER.stop();
+      /* User isn't logged in. Do nothing. */
+    });
   },
   getPlaylistByName: function(playlistName) {
     return this.state.playlists.filter(function(playlist) {
@@ -156,12 +169,12 @@ var MainContainer = React.createClass({
   render: function() {
     return (
       <div id='pndra-mainContainer' className='container'>
-        <TopNav />
-        <SideNav playlists={this.state.playlists}
+        <SideNav user={this.state.user}
+                 playlists={this.state.playlists}
                  currentPlaylist={this.state.currentPlaylist}
                  title={this.state.title}
-                 album={this.state.artist}
-                 artwork={this.state.artworkUrl}
+                 artist={this.state.artist}
+                 artworkUrl={this.state.artworkUrl}
                  audioSrc={this.state.audioSrc}
                  onSearchStation={this.onSearchStation}
                  onFindAndPlaySong={this.onFindAndPlaySong}
@@ -172,28 +185,6 @@ var MainContainer = React.createClass({
                   songMetadata={this.state.songMetadata}
                   onFindAndPlaySong={this.onFindAndPlaySong}
                   onSelectSong={this.onSelectSong} />
-      </div>
-    );
-  }
-});
-
-var TopNav = React.createClass({
-  getInitialState: function() {
-    return {
-      user: null
-    }
-  },
-  componentDidMount: function() {
-    $.get('/api/user', function(response) {
-      this.setState({ user: response.username });
-    }.bind(this));
-  },
-  render: function() {
-    return (
-      <div id='pndra-topNav'>
-        <a href={ this.state.user ? '/logout' : '/login'}>
-          { this.state.user ? this.state.user : 'Sign In' }
-        </a>
       </div>
     );
   }
@@ -244,6 +235,12 @@ var SideNav = React.createClass({
   nextSong: function() {
     this.props.onNextSong(this.props.onFindAndPlaySong);
   },
+  login: function() {
+    window.location.href = '/login';
+  },
+  logout: function() {
+    window.location.href = '/logout';
+  },
   render: function() {
     var hidden = {
       visibility: 'hidden'
@@ -274,6 +271,10 @@ var SideNav = React.createClass({
             <div>{this.props.title}</div>
             <div>{this.props.artist}</div>
           </div>
+          <span onClick={ this.props.user ? this.logout : this.login}
+             id='pndra-logout' className='hvr hvr-blue'>
+            { this.props.user ? this.props.user : 'Sign In' }
+          </span>
         </div>
       </div>
     );

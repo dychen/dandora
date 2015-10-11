@@ -30,31 +30,14 @@ html, body {
   background-image: url('http://www.pandora.com/static/valances/pandora/default/skin_background.jpg');
 }
 
-#pndra-topNav {
-  height: 30px;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  position: absolute;
-  background-color: #1c3f5b;
-
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: center;
-}
-
-#pndra-topNav a {
-  margin-right: 20px;
-}
-
 #pndra-sideNav {
   position: absolute;
-  top: 30px;
+  top: 0;
   left: 0;
   bottom: 0;
   min-height: 650px;
   width: 300px;
+  padding: 10px;
   background-color: #465c7d;
   color: white;
 
@@ -146,9 +129,13 @@ html, body {
   text-align: center;
 }
 
+#pndra-logout {
+  text-decoration: none;
+}
+
 #pndra-mainView {
   position: absolute;
-  top: 30px;
+  top: 0;
   left: 300px;
   right: 0;
   bottom: 0;
