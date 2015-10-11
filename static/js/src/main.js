@@ -146,9 +146,23 @@ var MainContainer = React.createClass({
 });
 
 var TopNav = React.createClass({
+  getInitialState: function() {
+    return {
+      user: null
+    }
+  },
+  componentDidMount: function() {
+    $.get('/api/user', function(response) {
+      this.setState({ user: response.username });
+      console.log(response);
+    }.bind(this));
+  },
   render: function() {
     return (
       <div id='pndra-topNav'>
+        <a href={ this.state.user ? '/logout' : '/login'}>
+          { this.state.user ? this.state.user : 'Sign In' }
+        </a>
       </div>
     );
   }

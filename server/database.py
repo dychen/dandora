@@ -3,7 +3,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, UnicodeText
+from sqlalchemy import Column, Integer, String, UnicodeText, ForeignKey
 
 # Initialize
 ROOT_DIR = os.environ['ROOT_DIR']
@@ -33,3 +33,16 @@ class Song(BASE):
     def __repr__(self):
         return '<Song %r>' % (self.title)
 
+class User(BASE):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String(50), index=True)
+    token = Column(String(100))
+    secret = Column(String(100))
+
+class Playlist(BASE):
+    __tablename__ = 'playlists'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)

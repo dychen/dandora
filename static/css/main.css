@@ -38,6 +38,14 @@ html, body {
   width: 100%;
   position: absolute;
   background-color: #1c3f5b;
+
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+}
+
+#pndra-topNav a {
+  margin-right: 20px;
 }
 
 #pndra-sideNav {

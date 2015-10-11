@@ -3,7 +3,7 @@ import random
 import requests
 from flask import Flask, jsonify, flash, render_template, session, redirect, url_for, request
 from flask.ext.sqlalchemy import SQLAlchemy
-from server.database import DB_SESSION, Song
+from server.database import DB_SESSION, Song, User, Playlist
 from server.oauth import twitter_oauth
 
 ROOT_DIR = os.environ['ROOT_DIR']
@@ -40,23 +40,47 @@ def login():
                                                       or None)
         )
 
+@app.route('/logout')
+def logout():
+    session.clear()
+    print session
+    return redirect('/')
+
 @app.route('/oauth-authorized')
 @twitter_oauth.authorized_handler
 def oauth_authorized(response):
     next_url = request.args.get('next') or url_for('/')
     if response is None:
-        flash('Unable to log in')
         return redirect(next_url)
+
+    user = User.query.filter_by(username=response['screen_name']).first()
+
+    if user:
+        pass
+    else:
+        new_account = User(
+            username=response['screen_name'],
+            token=response['oauth_token'],
+            secret=response['oauth_token_secret']
+        )
+        DB_SESSION.add(new_account)
+        DB_SESSION.commit()
 
     session['twitter_token'] = (
         response['oauth_token'],
         response['oauth_token_secret']
     )
-    session['twitter_user'] = response['screen_name']
+    session['username'] = response['screen_name']
 
     return redirect(next_url)
 
 # Internal API
+
+@app.route('/api/user')
+def user():
+    if is_logged_in():
+        return jsonify({ 'username': session['username']})
+    return jsonify({ 'username': None })
 
 @app.route('/api/songs')
 def songs():
@@ -86,6 +110,14 @@ def playlist():
     return jsonify({
         'length': len(songs),
         'data': songs
+    })
+
+@app.route('/api/playlists')
+def playlists():
+    playlists = Playlist.query.filter(user_id == 1) ##current_user.id)
+    return jsonify({
+        'length': len(playlists),
+        'data': playlists
     })
 
 @app.route('/api/song')
