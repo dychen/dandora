@@ -32,3 +32,11 @@
   -webkit-transform: scale(1.1);
   transform: scale(1.1);
 }
+
+.hvr-blue:hover {
+  color: #accdee
+}
+
+.hvr-red:hover {
+  color: #ff8585
+}

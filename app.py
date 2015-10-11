@@ -3,6 +3,7 @@ import random
 import requests
 from flask import Flask, jsonify, flash, render_template, session, redirect, url_for, request
 from flask.ext.sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError
 from server.database import DB_SESSION, Song, User, Playlist
 from server.oauth import twitter_oauth
 
@@ -101,7 +102,7 @@ def songs():
         'data': songs
     })
 
-@app.route('/api/playlists', methods=['GET', 'POST'])
+@app.route('/api/playlists', methods=['GET', 'POST', 'DELETE'])
 def playlist():
     def build_playlist(seed):
         LIMIT = 100
@@ -111,33 +112,47 @@ def playlist():
         return songs
 
     def save_playlist(playlist_name, user_id):
-        new_playlist = Playlist(user_id=user_id, name=playlist_name)
-        DB_SESSION.add(new_playlist)
-        DB_SESSION.commit()
+            new_playlist = Playlist(user_id=user_id, name=playlist_name)
+            DB_SESSION.add(new_playlist)
+            DB_SESSION.commit()
+
+    def delete_playlist(playlist_name, user_id):
+            playlist = (Playlist.query
+                                .filter_by(user_id=user.id, name=playlist_name)
+                                .one())
+            DB_SESSION.delete(playlist)
+            DB_SESSION.commit()
+
+    user = get_current_user()
 
     if request.method == 'POST':
-        user = get_current_user()
         seed = request.form.get('query')
 
         songs = build_playlist(seed)
-        save_playlist(seed, user.id)
+        try:
+            save_playlist(seed, user.id)
+            response = jsonify({ 'length': len(songs), 'data': songs })
+            response.status_code = 201
+            return response
+        except IntegrityError:
+            response = jsonify({ 'error': 'Playlist already exists' })
+            response.status_code = 409
+            return response
 
-        return jsonify({
-            'length': len(songs),
-            'data': songs
-        })
+    elif request.method == 'DELETE':
+        name = request.form.get('name')
+        delete_playlist(name, user.id)
+        return jsonify({ 'playlist': name })
+
     else:
-        user = get_current_user()
         playlists = [
             {
                 'name': playlist.name,
                 'songs': build_playlist(playlist.name),
                 'index': 0,
-                'maxIdx': 0
+                'maxIndex': 0
             }
-            for playlist in (DB_SESSION.query(Playlist)
-                                       .filter(Playlist.user_id == user.id)
-                                       .all())
+            for playlist in Playlist.query.filter_by(user_id=user.id).all()
         ]
         return jsonify({
             'length': len(playlists),

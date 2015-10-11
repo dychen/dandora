@@ -67,6 +67,9 @@ var MainContainer = React.createClass({
         currentPlaylist: query
       });
     }
+    else {
+      this.setState({ currentPlaylist: query });
+    }
   },
   onFindAndPlaySong: function(query) {
     SPINNER.spin(document.getElementById('pndra-spinner'));
@@ -101,6 +104,27 @@ var MainContainer = React.createClass({
       var playlist = this.getPlaylistByName(playlistName);
       callback(playlist.songs[playlist.maxIndex]);
     });
+  },
+  onDeletePlaylist: function(playlistName) {
+    var request = $.ajax({
+      url:'/api/playlists',
+      method: 'DELETE',
+      data: { name: playlistName }
+    });
+    request.done(function() {
+      // React immutability helpers documentation:
+      // https://facebook.github.io/react/docs/update.html
+      var playlistIndex = this.getPlaylistIndexByName(playlistName);
+      var newPlaylists = React.addons.update(this.state.playlists, {
+        $splice: [[playlistIndex, 1]]
+      });
+      this.setState({
+        playlists: newPlaylists
+      });
+    }.bind(this));
+    request.fail(function(response) {
+      /* Do stuff? */
+    }.bind(this));
   },
   onNextSong: function(callback) {
     // React immutability helpers documentation:
@@ -142,6 +166,7 @@ var MainContainer = React.createClass({
                  onSearchStation={this.onSearchStation}
                  onFindAndPlaySong={this.onFindAndPlaySong}
                  onSwitchPlaylist={this.onSwitchPlaylist}
+                 onDeletePlaylist={this.onDeletePlaylist}
                  onNextSong={this.onNextSong} />
         <MainView playlist={this.getPlaylistByName(this.state.currentPlaylist)}
                   songMetadata={this.state.songMetadata}
@@ -201,13 +226,20 @@ var SideNav = React.createClass({
   },
   searchStation: function(item) {
     $.post('/api/playlists', { query: item }, function(response) {
-      this.props.onSearchStation(item, response.data);
+      var songName = this.props.onSearchStation(item, response.data);
       this.props.onFindAndPlaySong(response.data[0]);
       $('#create-station-typeahead').text('');
+    }.bind(this)).error(function(jqXHR, textStatus, error) {
+      if (jqXHR.status === 409) {
+        /* Play existing playlist? */
+      }
     }.bind(this));
   },
   switchPlaylist: function(playlistName) {
     this.props.onSwitchPlaylist(playlistName, this.props.onFindAndPlaySong);
+  },
+  deletePlaylist: function(playlistName) {
+    this.props.onDeletePlaylist(playlistName);
   },
   nextSong: function() {
     this.props.onNextSong(this.props.onFindAndPlaySong);
@@ -229,7 +261,8 @@ var SideNav = React.createClass({
           <h4>Stations</h4>
           <PlaylistList playlists={this.props.playlists}
                         currentPlaylist={this.props.currentPlaylist}
-                        switchPlaylist={this.switchPlaylist} />
+                        switchPlaylist={this.switchPlaylist}
+                        deletePlaylist={this.deletePlaylist} />
         </div>
 
         <div id='pndra-sideNav-flexBottom'>
@@ -254,10 +287,17 @@ var PlaylistList = React.createClass({
         <ul id='pndra-stationList'>
           {this.props.playlists.map(function(playlist) {
             return (
-              <li onClick={this.props.switchPlaylist.bind(this, playlist.name)}
-                  className={this.props.currentPlaylist === playlist.name
-                             ? 'hvr hvr-grow active' : 'hvr hvr-grow'}>
-                {playlist.name}
+              <li>
+                <span className='pndra-deletePlaylist hvr hvr-red'
+                  onClick={this.props.deletePlaylist.bind(this, playlist.name)}>
+                  &#x2716;
+                </span>
+                <span className={this.props.currentPlaylist === playlist.name
+                  ? 'pndra-playlistName hvr hvr-blue active'
+                  : 'pndra-playlistName hvr hvr-blue'}
+                  onClick={this.props.switchPlaylist.bind(this, playlist.name)}>
+                  {playlist.name}
+                </span>
               </li>
             );
           }.bind(this))}

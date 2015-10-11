@@ -78,15 +78,26 @@ html, body {
   padding: 10px;
   overflow: scroll;
   list-style: none;
+  text-align: left;
 }
 
 #pndra-stationList li {
   padding: 5px;
+  display: flex;
 }
 
-#pndra-stationList li.active {
+#pndra-stationList li .active {
   color: #accdff;
   font-weight: bold;
+}
+
+#pndra-stationList .pndra-deletePlaylist {
+  float: left;
+  margin-left: 10px;
+}
+
+#pndra-stationList .pndra-playlistName {
+  margin-left: 20px;
 }
 
 .pndra-progressBar {
