@@ -15,7 +15,7 @@
 
 /* Grow */
 .hvr-grow {
-  display: inline-block;
+  /* display: inline-block; */ /* This does weird stuff to styled lists */
   vertical-align: middle;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);

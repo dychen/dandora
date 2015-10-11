@@ -36,6 +36,13 @@ var MainContainer = React.createClass({
       songMetadata: {}
     };
   },
+  componentDidMount: function() {
+    SPINNER.spin(document.getElementById('pndra-spinner'));
+    $.get('/api/playlists', function(response) {
+      this.setState({ playlists: response.data });
+      SPINNER.stop();
+    }.bind(this));
+  },
   getPlaylistByName: function(playlistName) {
     return this.state.playlists.filter(function(playlist) {
       return playlist.name === playlistName;
@@ -154,7 +161,6 @@ var TopNav = React.createClass({
   componentDidMount: function() {
     $.get('/api/user', function(response) {
       this.setState({ user: response.username });
-      console.log(response);
     }.bind(this));
   },
   render: function() {
@@ -194,7 +200,7 @@ var SideNav = React.createClass({
     }.bind(this));
   },
   searchStation: function(item) {
-    $.get('/api/playlist', { query: item }, function(response) {
+    $.post('/api/playlists', { query: item }, function(response) {
       this.props.onSearchStation(item, response.data);
       this.props.onFindAndPlaySong(response.data[0]);
       $('#create-station-typeahead').text('');

@@ -14,6 +14,11 @@ app.secret_key = os.environ['SECRET_KEY']
 def is_logged_in():
     return True if session.get('twitter_token') else False
 
+def get_current_user():
+    if is_logged_in():
+        return User.query.filter_by(username=session['username']).first()
+    return None
+
 @app.teardown_appcontext
 def shutdown_session(exception=None):
     DB_SESSION.remove()
@@ -96,29 +101,48 @@ def songs():
         'data': songs
     })
 
-@app.route('/api/playlist')
+@app.route('/api/playlists', methods=['GET', 'POST'])
 def playlist():
-    LIMIT = 100
-    def get_playlist(seed):
+    def build_playlist(seed):
+        LIMIT = 100
+
         songs = list(set([s.artist for s in Song.query.limit(LIMIT).all()]))
         random.shuffle(songs)
         return songs
 
-    seed = request.args.get('query')
-    songs = get_playlist(seed)
+    def save_playlist(playlist_name, user_id):
+        new_playlist = Playlist(user_id=user_id, name=playlist_name)
+        DB_SESSION.add(new_playlist)
+        DB_SESSION.commit()
 
-    return jsonify({
-        'length': len(songs),
-        'data': songs
-    })
+    if request.method == 'POST':
+        user = get_current_user()
+        seed = request.form.get('query')
 
-@app.route('/api/playlists')
-def playlists():
-    playlists = Playlist.query.filter(user_id == 1) ##current_user.id)
-    return jsonify({
-        'length': len(playlists),
-        'data': playlists
-    })
+        songs = build_playlist(seed)
+        save_playlist(seed, user.id)
+
+        return jsonify({
+            'length': len(songs),
+            'data': songs
+        })
+    else:
+        user = get_current_user()
+        playlists = [
+            {
+                'name': playlist.name,
+                'songs': build_playlist(playlist.name),
+                'index': 0,
+                'maxIdx': 0
+            }
+            for playlist in (DB_SESSION.query(Playlist)
+                                       .filter(Playlist.user_id == user.id)
+                                       .all())
+        ]
+        return jsonify({
+            'length': len(playlists),
+            'data': playlists
+        })
 
 @app.route('/api/song')
 def song():

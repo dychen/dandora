@@ -46,3 +46,4 @@ class Playlist(BASE):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    name = Column(UnicodeText(200))
