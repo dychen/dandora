@@ -500,6 +500,12 @@ var AudioPlayer = React.createClass({
       this.audio.play();
     this.setState({ playing: !this.state.playing });
   },
+  skipTo: function(e) {
+    var ele = $('.pndra-progressBar:first');
+    var xPos = e.pageX - ele.offset().left;
+    var width = ele.width();
+    this.audio.currentTime = this.audio.duration * (xPos / width);
+  },
   getProgress: function() {
     return this.state.currentPosition / this.state.duration * 100;
   },
@@ -527,7 +533,8 @@ var AudioPlayer = React.createClass({
         {this.formatTime(this.state.currentPosition)}
         &nbsp;/&nbsp;{this.formatTime(this.state.duration)}
         <ReactBootstrap.ProgressBar className='pndra-progressBar'
-                                    active now={this.getProgress()} />
+                                    active now={this.getProgress()}
+                                    onClick={this.skipTo} />
         <div id='pndra-audioControl'>
           <ReactBootstrap.Glyphicon className='hvr hvr-grow pndra-audioButton'
                                     glyph='thumbs-up' />
