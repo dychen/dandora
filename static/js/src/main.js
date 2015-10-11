@@ -143,6 +143,28 @@ var MainContainer = React.createClass({
     // React immutability helpers documentation:
     // https://facebook.github.io/react/docs/update.html
     var playlistIndex = this.getPlaylistIndexByName(this.state.currentPlaylist);
+    var playlist = this.state.playlists[playlistIndex];
+    if (playlist.index === playlist.maxIndex)
+      this.onNewSong(callback); // We're at the last song in the playlist, so
+                                // grab a new one
+    else {
+      var newPlaylists = React.addons.update(this.state.playlists, {
+        [playlistIndex]: {
+          index: { $set: this.state.playlists[playlistIndex].index + 1}
+        }
+      });
+      this.setState({
+        playlists: newPlaylists
+      }, function() {
+        var playlist = this.getPlaylistByName(this.state.currentPlaylist);
+        callback(playlist.songs[playlist.index]);
+      });
+    }
+  },
+  onNewSong: function(callback) {
+    // React immutability helpers documentation:
+    // https://facebook.github.io/react/docs/update.html
+    var playlistIndex = this.getPlaylistIndexByName(this.state.currentPlaylist);
     var newPlaylists = React.addons.update(this.state.playlists, {
       [playlistIndex]: {
         maxIndex: { $set: this.state.playlists[playlistIndex].maxIndex + 1 },
@@ -180,7 +202,8 @@ var MainContainer = React.createClass({
                  onFindAndPlaySong={this.onFindAndPlaySong}
                  onSwitchPlaylist={this.onSwitchPlaylist}
                  onDeletePlaylist={this.onDeletePlaylist}
-                 onNextSong={this.onNextSong} />
+                 onNextSong={this.onNextSong}
+                 onNewSong={this.onNewSong} />
         <MainView playlist={this.getPlaylistByName(this.state.currentPlaylist)}
                   songMetadata={this.state.songMetadata}
                   onFindAndPlaySong={this.onFindAndPlaySong}
@@ -235,6 +258,9 @@ var SideNav = React.createClass({
   nextSong: function() {
     this.props.onNextSong(this.props.onFindAndPlaySong);
   },
+  newSong: function() {
+    this.props.onNewSong(this.props.onFindAndPlaySong);
+  },
   login: function() {
     window.location.href = '/login';
   },
@@ -264,7 +290,8 @@ var SideNav = React.createClass({
 
         <div id='pndra-sideNav-flexBottom'>
           <AudioPlayer audioSrc={this.props.audioSrc}
-                       nextSong={this.nextSong} />
+                       nextSong={this.nextSong}
+                       newSong={this.newSong} />
           <div id='pndra-sideNavAlbum'
             className={this.props.audioSrc ? '' : 'album-hidden'}>
             <img src={this.props.artworkUrl}></img>
@@ -319,7 +346,7 @@ var AudioPlayer = React.createClass({
   componentDidMount: function() {
     this.audio = document.getElementById('pndra-audio-player');
     this.audio.addEventListener('timeupdate', this.handleTimeUpdate);
-    this.audio.addEventListener('ended', this.handleSongEnded);
+    this.audio.addEventListener('ended', this.props.nextSong);
     this.audio.crossOrigin = 'anonymous';
 
     // Hook things up for processing:
@@ -466,9 +493,6 @@ var AudioPlayer = React.createClass({
       });
     }
   },
-  handleSongEnded: function() {
-    this.props.nextSong();
-  },
   play: function() {
     if (this.state.playing === true)
       this.audio.pause();
@@ -513,10 +537,11 @@ var AudioPlayer = React.createClass({
                                     glyph={playIcon}
                                     onClick={this.play} />
           <ReactBootstrap.Glyphicon className='hvr hvr-grow pndra-audioButton'
-                                    glyph='fast-forward'
-                                    onClick={this.handleSongEnded} />
+                                    glyph='step-forward'
+                                    onClick={this.props.nextSong} />
           <ReactBootstrap.Glyphicon className='hvr hvr-grow pndra-audioButton'
-                                    glyph='volume-up' />
+                                    glyph='fast-forward'
+                                    onClick={this.props.newSong} />
         </div>
       </div>
     );
@@ -599,8 +624,8 @@ var MainView = React.createClass({
             {albums.map(function(album, i) {
               return (
                 <div className={this.props.playlist.index === album.index
-                                ? 'pndra-album hvr hvr-grow selected'
-                                : 'pndra-album hvr hvr-grow'}
+                                ? 'pndra-album hvr hvr-blue selected'
+                                : 'pndra-album hvr hvr-blue'}
                   onClick={this.props.onSelectSong.bind(this, album.index)}>
                   <img src={album.artworkUrl}></img>
                   <span className='albumText'>
