@@ -1,13 +1,5 @@
 'use strict';
 
-var BACKGROUND_URL = 'http://www.pandora.com/static/valances/pandora/default/skin_background.jpg';
-
-var COLORS = {
-  darkblue: '#1c3f5b',
-  lightblue: '#465c7d',
-  brightblue: '#accdff',
-};
-
 var SPINNER = new Spinner({ color: 'white' }).spin(document.getElementById('pndra-spinner'));
 SPINNER.stop();
 

@@ -27,7 +27,10 @@ def shutdown_session(exception=None):
 @app.route('/')
 @app.route('/index')
 def index():
-    return render_template('main.html')
+    if is_logged_in():
+        return render_template('main.html')
+    else:
+        return redirect('/login')
 
 # Authentication
 
@@ -40,16 +43,23 @@ def login():
     if is_logged_in():
         return redirect('/')
     else:
+        return render_template('login.html')
+
+@app.route('/login/auth')
+def auth():
+    if is_logged_in():
+        return redirect('/')
+    else:
         return twitter_oauth.authorize(
-            callback=url_for('oauth_authorized', next=request.args.get('next')
-                                                      or request.referrer
-                                                      or None)
+            callback=url_for(
+                'oauth_authorized',
+                next=request.args.get('next') or request.referrer or None
+            )
         )
 
 @app.route('/logout')
 def logout():
     session.clear()
-    print session
     return redirect('/')
 
 @app.route('/oauth-authorized')
