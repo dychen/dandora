@@ -3,14 +3,16 @@ import random
 import requests
 from flask import Flask, jsonify, flash, render_template, session, redirect, url_for, request
 from flask.ext.sqlalchemy import SQLAlchemy
+from flask_s3 import FlaskS3
 from sqlalchemy.exc import IntegrityError
 from server.database import DB_SESSION, Song, User, Playlist
 from server.oauth import twitter_oauth
 
-ROOT_DIR = os.environ['ROOT_DIR']
-
 app = Flask(__name__)
 app.secret_key = os.environ['SECRET_KEY']
+if os.environ['ENVIRONMENT'] == 'production':
+    app.config['S3_BUCKET_NAME'] = os.environ['S3_BUCKET_NAME']
+FlaskS3(app)
 
 def is_logged_in():
     return True if session.get('token') else False
@@ -37,12 +39,18 @@ def shutdown_session(exception=None):
     DB_SESSION.remove()
 
 @app.route('/')
-@app.route('/index')
 def index():
-    if is_logged_in():
-        return render_template('main.html')
-    else:
-        return redirect('/login')
+    try:
+        if is_logged_in():
+            return render_template('main.html')
+        else:
+            return redirect('/login')
+    except Exception, e:
+        print 'Error'
+        print url_for('static', filename='js/dist/main.js')
+        print e
+        import sys, traceback
+        traceback.print_exc(file=sys.stdout)
 
 # Authentication
 
@@ -50,7 +58,7 @@ def index():
 def get_twitter_token(token=None):
     return session.get('token')
 
-@app.route('/login')
+@app.route('/login/')
 def login():
     if is_logged_in():
         return redirect('/')
@@ -232,4 +240,7 @@ def song():
 
 if __name__ == '__main__':
     # TODO: Remove debug before deployment
-    app.run(debug=True)
+    if os.environ['ENVIRONMENT'] == 'development':
+        app.run(debug=True)
+    else:
+        app.run(debug=False)

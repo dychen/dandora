@@ -8,9 +8,12 @@ $ jsx --watch static/js/src/ static/js/dist/ # Start JSX compiler
 
 ###Setup
 ```
-$ python # Initialize the local database
->>> from server.database_init import init_db
->>> init_db()
+(venv)$ python server/database.py --init --seed data/train/unique_tracks.txt
+```
+
+###Deployment
+```
+$ python deploy_assets.py # Deploy assets. WARNING: Also uploads the js/src directory
 ```
 
 ###Million Song Dataset (MSD)
@@ -93,6 +96,11 @@ requests
 Flask-OAuth
 + httplib2
 + oauth2
+
+# For Heroku deployment
+gunicorn
+psycopg2
+flask-s3
 ```
 
 ###Old/Unused

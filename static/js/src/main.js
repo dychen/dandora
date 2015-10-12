@@ -1,5 +1,7 @@
 'use strict';
 
+var BUCKET_URL = 'http://s3-us-west-1.amazonaws.com/pandora-s3/static/';
+
 var SPINNER = new Spinner({ color: 'white' }).spin(document.getElementById('pndra-spinner'));
 SPINNER.stop();
 
@@ -118,7 +120,7 @@ var MainContainer = React.createClass({
       //        is-javascript-a-pass-by-reference-or-pass-by-value-language
       var newSongMetadata = this.state.songMetadata;
       var artworkUrl = (response.artwork_url
-        ? response.artwork_url : '/static/assets/no-album.png');
+        ? response.artwork_url : BUCKET_URL + 'assets/no-album.png');
       newSongMetadata[query] = {
         title: response.title,
         artist: response.user,
@@ -598,7 +600,7 @@ var MainView = React.createClass({
     };
   },
   componentWillReceiveProps: function(newProps) {
-    if (this.props.playlist
+    if (this.props.playlist && newProps.playlist
         && this.props.playlist.maxIndex !== newProps.playlist.maxIndex)
       this.setState({ scrollIndex: newProps.playlist.maxIndex });
   },
@@ -669,8 +671,8 @@ var MainView = React.createClass({
                   onClick={this.props.onSelectSong.bind(this, album.index)}>
                   <img src={album.artworkUrl}></img>
                   <span className='albumText'>
-                    <div>{album.title}</div>
-                    <div>{album.artist}</div>
+                    <div className='albumTitle'>{album.title}</div>
+                    <div className='albumArtist'>{album.artist}</div>
                   </span>
                 </div>
               );

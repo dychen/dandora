@@ -2,9 +2,9 @@
 <html>
   <head>
     {% include '_header.html' %}
-    <link rel="stylesheet" type="text/css" href="/static/css/login.css" />
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/login.css') }}" />
 
-    <script type="text/javascript" src="/static/js/lib/bootstrap3-typeahead.min.js"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='js/lib/bootstrap3-typeahead.min.js') }}"></script>
   </head>
   <body>
     <div id="pndra-login">

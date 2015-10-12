@@ -2,21 +2,21 @@
 <html>
   <head>
     {% include '_header.html' %}
-    <link rel="stylesheet" type="text/css" href="/static/css/main.css" />
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/main.css') }}" />
 
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/react/0.13.3/react-with-addons.min.js"></script>
     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/react/0.13.3/JSXTransformer.js"></script>
     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/react-bootstrap/0.25.1/react-bootstrap.min.js"></script>
     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/spin.js/2.3.2/spin.min.js"></script>
     <script type="text/javascript" src="//connect.soundcloud.com/sdk-2.0.0.js"></script>
-    <script type="text/javascript" src="/static/js/lib/bootstrap3-typeahead.min.js"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='js/lib/bootstrap3-typeahead.min.js') }}"></script>
   </head>
   <body>
     <div id="pndra-spinner"></div>
     <div id="pndra-main">
     </div>
 
-    <script type="text/jsx" src="/static/js/dist/main.js"></script>
+    <script type="text/jsx" src="{{ url_for('static', filename='js/dist/main.js') }}"></script>
   </body>
 </html>
 
