@@ -117,22 +117,27 @@ var MainContainer = React.createClass({
       // See: http://stackoverflow.com/questions/518000/
       //        is-javascript-a-pass-by-reference-or-pass-by-value-language
       var newSongMetadata = this.state.songMetadata;
+      var artworkUrl = (response.artwork_url
+        ? response.artwork_url : '/static/assets/no-album.png');
       newSongMetadata[query] = {
         title: response.title,
         artist: response.user,
-        artworkUrl: response.artwork_url
+        artworkUrl: artworkUrl
       }
       this.setState({
         songMetadata: newSongMetadata,
         title: response.title,
         artist: response.user,
-        artworkUrl: response.artwork_url
+        artworkUrl: artworkUrl
       });
       SC.stream('/tracks/' + response['id'], function(sound) {
         this.setState({ audioSrc: sound._player._descriptor.src });
         SPINNER.stop();
       }.bind(this));
-    }.bind(this));
+    }.bind(this)).fail(function(jqXHR, textStatus, error) {
+      // Couldn't find a song. Remove query from playlist and try the next
+      // one.
+    });
   },
   onSwitchPlaylist: function(playlistName, callback) {
     this.setState({
@@ -268,7 +273,7 @@ var SideNav = React.createClass({
       var songName = this.props.onSearchStation(item, response.data);
       this.props.onFindAndPlaySong(response.data[0]);
       $('#create-station-typeahead').text('');
-    }.bind(this)).error(function(jqXHR, textStatus, error) {
+    }.bind(this)).fail(function(jqXHR, textStatus, error) {
       if (jqXHR.status === 409) {
         /* Play existing playlist? */
       }
@@ -464,9 +469,9 @@ var AudioPlayer = React.createClass({
     var binSum;
     var x = 0;
     var gradient = this.canvasLeftCtx.createLinearGradient(0, 0, 0, this.canvasLeft.height);
-    gradient.addColorStop(1, '#000066');
-    gradient.addColorStop(0.8, '#000099');
-    gradient.addColorStop(0, '#ffffff');
+    gradient.addColorStop(1, '#C1ECF7');
+    gradient.addColorStop(0.5, '#1984d2');
+    gradient.addColorStop(0, '#063354');
     this.canvasLeftCtx.fillStyle = gradient;
     for (var i = 0; i < this.freqArray.length * 3/4; i++) {
       if (i % binSize === 0) {
@@ -484,9 +489,9 @@ var AudioPlayer = React.createClass({
     var barHeight;
     var avgFreq = 0;
     var gradient = this.canvasRightCtx.createLinearGradient(0, 0, 0, this.canvasRight.height);
-    gradient.addColorStop(1, '#000066');
-    gradient.addColorStop(0.8, '#000099');
-    gradient.addColorStop(0, '#ffffff');
+    gradient.addColorStop(1, '#C1ECF7');
+    gradient.addColorStop(0.5, '#1984d2');
+    gradient.addColorStop(0, '#063354');
     this.canvasRightCtx.fillStyle = gradient;
     for (var i = 0; i < this.freqArray.length; i++) {
       avgFreq += this.freqArray[i];
