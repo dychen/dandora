@@ -1,0 +1,99 @@
+#pndra-login {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-height: 650px;
+  min-width: 1000px;
+  overflow: hidden;
+  padding: 0;
+  background-image: url('/static/assets/background.jpg');
+  background-size: cover;
+}
+
+#pndra-loginBoxBorder {
+  width: 500px;
+  height: 340px;
+  position: relative;
+  top: 50%;
+  left: 50%;
+  margin-left: -250px;
+  margin-top: -170px;
+  border: solid 1px;
+  border-radius: 5px;
+  border-color: rgba(2, 20, 47, 0.8);
+  background-color: rgba(2, 20, 47, 0.1);
+}
+
+#pndra-loginBox {
+  width: 480px;
+  height: 320px;
+  position: relative;
+  top: 50%;
+  left: 50%;
+  margin-left: -240px;
+  margin-top: -160px;
+  border-radius: 5px;
+  background-color: rgba(2, 20, 47, 0.8);
+  text-align: center;
+
+  color: white;
+}
+
+#pndra-loginBox #welcome1 {
+  position: absolute;
+  margin: auto;
+  top: 40px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font-size: 2.4em;
+  font-weight: bold;
+}
+
+#pndra-loginBox #welcome1 .blue {
+  color: #accdff;
+}
+
+#pndra-loginBox #welcome2 {
+  position: absolute;
+  margin: auto;
+  top: 115px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font-size: 1.5em;
+}
+
+#pndra-loginBox img {
+  position: absolute;
+  margin: auto;
+  top: 20px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+#pndra-loginBox #welcome3 {
+  position: absolute;
+  margin: auto;
+  top: 205px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font-size: 1.3em;
+}
+
+#pndra-loginBox input {
+  position: absolute;
+  margin: auto;
+  top: 200px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 350px;
+}
+
