@@ -33,6 +33,27 @@ var MainContainer = React.createClass({
       audioSrc: ''
     };
   },
+  setIntroBlur: function() {
+    var jqQueries = ['#pndra-mainContainer .background:first',
+      '#pndra-mainView:first', '#pndra-sideNav-flexTop h4:first',
+      '#pndra-sideNav-flexBottom:first'];
+    for (var i = 0; i < jqQueries.length; i++) {
+      $(jqQueries[i]).addClass('pndra-blur');
+    }
+    $('#pndra-createStationInput input:first').focus();
+    $('#pndra-createStationPopover').css('visibility', 'visible');
+  },
+  unsetIntroBlur: function() {
+    if ($('#pndra-createStationPopover').css('visibility') === 'visible')
+      $('#pndra-createStationPopover').hide();
+    var jqQueries = ['#pndra-mainContainer .background:first',
+      '#pndra-mainView:first', '#pndra-sideNav-flexTop h4:first',
+      '#pndra-sideNav-flexBottom:first'];
+    for (var i = 0; i < jqQueries.length; i++) {
+      if ($(jqQueries[i]).hasClass('pndra-blur'))
+        $(jqQueries[i]).removeClass('pndra-blur');
+    }
+  },
   componentDidMount: function() {
     SPINNER.spin(document.getElementById('pndra-spinner'));
     $.get('/api/user', function(response) {
@@ -40,8 +61,18 @@ var MainContainer = React.createClass({
     }.bind(this));
 
     var response = $.get('/api/playlists', function(response) {
-      this.setState({ playlists: response.data });
-      SPINNER.stop();
+      if (response.data.length > 0) {
+        this.setState({ playlists: response.data }, function() {
+          /* If there's at least one playlist, auto-play from the first one */
+          var playlistName = response.data[0].name;
+          this.onSwitchPlaylist(playlistName, this.onFindAndPlaySong)
+          SPINNER.stop();
+        });
+      }
+      else {
+        this.setIntroBlur();
+        SPINNER.stop();
+      }
     }.bind(this));
     response.fail(function(jqXHR, textStatus, error) {
       SPINNER.stop();
@@ -59,6 +90,7 @@ var MainContainer = React.createClass({
     }.bind(this));
   },
   onSearchStation: function(query, songs) {
+    this.unsetIntroBlur();
     if (this.state.playlists.filter(function(playlist) {
       return playlist.name === query;
     }).length === 0) {
@@ -183,6 +215,7 @@ var MainContainer = React.createClass({
   render: function() {
     return (
       <div id='pndra-mainContainer' className='container'>
+        <div className='background'></div>
         <SideNav user={this.state.user}
                  playlists={this.state.playlists}
                  currentPlaylist={this.state.currentPlaylist}
@@ -260,9 +293,6 @@ var SideNav = React.createClass({
     window.location.href = '/logout';
   },
   render: function() {
-    var hidden = {
-      visibility: 'hidden'
-    };
     return (
       <div id='pndra-sideNav'>
         <div id='pndra-sideNav-flexTop'>
@@ -273,6 +303,12 @@ var SideNav = React.createClass({
               placeholder='Create Station'
               addonBefore={<ReactBootstrap.Glyphicon glyph='plus' />} />
           </div>
+          <ReactBootstrap.Popover
+            id='pndra-createStationPopover'
+            placement='right'>
+            Create a station to get started!
+          </ReactBootstrap.Popover>
+
           <h4>Stations</h4>
           <PlaylistList playlists={this.props.playlists}
                         currentPlaylist={this.props.currentPlaylist}
