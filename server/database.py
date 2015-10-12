@@ -1,9 +1,9 @@
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column, Integer, String, UnicodeText, \
+    ForeignKey, UniqueConstraint
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, UnicodeText, ForeignKey
 
 # Initialize
 ROOT_DIR = os.environ['ROOT_DIR']
@@ -46,4 +46,5 @@ class Playlist(BASE):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    name = Column(UnicodeText(200), unique=True)
+    name = Column(UnicodeText(200))
+    __table_args__ = (UniqueConstraint('user_id', 'name'),)

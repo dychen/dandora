@@ -88,9 +88,9 @@
 }
 
 #pndra-loginBox input {
-  position: absolute;
+  position: relative; /* relative for bootstrap3-typeahead.js */
   margin: auto;
-  top: 200px;
+  top: 240px;
   left: 0;
   right: 0;
   bottom: 0;

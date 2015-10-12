@@ -13,12 +13,24 @@ app = Flask(__name__)
 app.secret_key = os.environ['SECRET_KEY']
 
 def is_logged_in():
-    return True if session.get('twitter_token') else False
+    return True if session.get('token') else False
 
 def get_current_user():
     if is_logged_in():
         return User.query.filter_by(username=session['username']).first()
     return None
+
+def create_user(username, token, secret):
+    new_account = User(username=username, token=token, secret=secret)
+    DB_SESSION.add(new_account)
+    DB_SESSION.commit()
+    return new_account
+
+def create_playlist(playlist_name, user_id):
+    new_playlist = Playlist(user_id=user_id, name=playlist_name)
+    DB_SESSION.add(new_playlist)
+    DB_SESSION.commit()
+    return new_playlist
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):
@@ -36,7 +48,7 @@ def index():
 
 @twitter_oauth.tokengetter
 def get_twitter_token(token=None):
-    return session.get('twitter_token')
+    return session.get('token')
 
 @app.route('/login')
 def login():
@@ -57,6 +69,29 @@ def auth():
             )
         )
 
+@app.route('/login/auth/null')
+def fake_auth():
+    def generate_username():
+        return 'Guest-%d' % random.randint(0, 1000000)
+    def generate_fake_token():
+        token = os.urandom(20).encode('hex')[:39]
+        return '0000000000-%s' % token
+    def generate_fake_secret():
+        return os.urandom(23).encode('hex')[:45]
+
+    if is_logged_in():
+        return redirect('/')
+    else:
+        playlist = request.args.get('query')
+        username = generate_username()
+        token = generate_fake_token()
+        secret = generate_fake_secret()
+        user = create_user(username, token, secret)
+        session['username'] = username
+        session['token'] = (token, secret)
+        create_playlist(playlist, user.id)
+        return redirect('/')
+
 @app.route('/logout')
 def logout():
     session.clear()
@@ -74,15 +109,11 @@ def oauth_authorized(response):
     if user:
         pass
     else:
-        new_account = User(
-            username=response['screen_name'],
-            token=response['oauth_token'],
-            secret=response['oauth_token_secret']
-        )
-        DB_SESSION.add(new_account)
-        DB_SESSION.commit()
+        create_user(response['screen_name'],
+                    response['oauth_token'],
+                    response['oauth_token_secret'])
 
-    session['twitter_token'] = (
+    session['token'] = (
         response['oauth_token'],
         response['oauth_token_secret']
     )
@@ -121,11 +152,6 @@ def playlist():
         random.shuffle(songs)
         return songs
 
-    def save_playlist(playlist_name, user_id):
-            new_playlist = Playlist(user_id=user_id, name=playlist_name)
-            DB_SESSION.add(new_playlist)
-            DB_SESSION.commit()
-
     def delete_playlist(playlist_name, user_id):
             playlist = (Playlist.query
                                 .filter_by(user_id=user.id, name=playlist_name)
@@ -144,7 +170,7 @@ def playlist():
 
         songs = build_playlist(seed)
         try:
-            save_playlist(seed, user.id)
+            create_playlist(seed, user.id)
             response = jsonify({ 'length': len(songs), 'data': songs })
             response.status_code = 201
             return response

@@ -3,6 +3,8 @@
   <head>
     {% include '_header.html' %}
     <link rel="stylesheet" type="text/css" href="/static/css/login.css" />
+
+    <script type="text/javascript" src="/static/js/lib/bootstrap3-typeahead.min.js"></script>
   </head>
   <body>
     <div id="pndra-login">
@@ -17,12 +19,31 @@
           <a href="/login/auth">
             <img src="/static/assets/twitter-login.png"></img>
           </a>
-          <span id="welcome3">or create a station without signing in</span>
-          <input type="text" class="form-control" placeholder="Create a station">
+          <span id="welcome3">or create a station as a guest</span>
+          <input id="create-station"
+                 type="text"
+                 class="form-control"
+                 placeholder="Create a station (type a song or artist name)">
         </div>
       </div>
     </div>
 
+    <script>
+      $(document).ready(function() {
+        var selectStation = function(item) {
+          var params = "query=" + encodeURIComponent(item);
+          window.location.href = '/login/auth/null?' + params
+        }
+        $.get('/api/songs', function(response) {
+          $('#create-station').typeahead({
+            source: response.data,
+            minLength: 1,
+            items: 8,
+            afterSelect: selectStation
+          });
+        });
+      });
+    </script>
   </body>
 </html>
 

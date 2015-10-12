@@ -292,7 +292,7 @@ var SideNav = React.createClass({
           </div>
           <span onClick={ this.props.user ? this.logout : this.login}
              id='pndra-logout' className='hvr hvr-blue'>
-            { this.props.user ? this.props.user : 'Sign In' }
+            { this.props.user ? this.props.user + ' (Logout)' : 'Sign In' }
           </span>
         </div>
       </div>
