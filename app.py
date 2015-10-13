@@ -12,7 +12,7 @@ app = Flask(__name__)
 app.secret_key = os.environ['SECRET_KEY']
 if os.environ['ENVIRONMENT'] == 'production':
     app.config['S3_BUCKET_NAME'] = os.environ['S3_BUCKET_NAME']
-FlaskS3(app)
+    FlaskS3(app)
 
 def is_logged_in():
     return True if session.get('token') else False

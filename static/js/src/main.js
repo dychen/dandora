@@ -111,6 +111,18 @@ var MainContainer = React.createClass({
     }
   },
   onFindAndPlaySong: function(query) {
+    var clipText = function(text, maxLen) {
+      if (text.length < maxLen)
+        return text;
+      var textArr = text.split(' ');
+      var joined = '';
+      for (var i = 0; i < textArr.length; i++) {
+        joined = textArr.slice(0, i+1).join(' ');
+        if (joined.length > maxLen - 3)
+          return textArr.slice(0, i).join(' ') + '...';
+      }
+      return text;
+    };
     SPINNER.spin(document.getElementById('pndra-spinner'));
     $.get('/api/song', { query: query }, function(response) {
       console.log('Response', response);
@@ -121,15 +133,18 @@ var MainContainer = React.createClass({
       var newSongMetadata = this.state.songMetadata;
       var artworkUrl = (response.artwork_url
         ? response.artwork_url : BUCKET_URL + 'assets/no-album.png');
+      // Clip title and artist strings based on length
+      var title = clipText(response.title, 50);
+      var artist = clipText(response.user, 25);
       newSongMetadata[query] = {
-        title: response.title,
-        artist: response.user,
+        title: title,
+        artist: artist,
         artworkUrl: artworkUrl
       }
       this.setState({
         songMetadata: newSongMetadata,
-        title: response.title,
-        artist: response.user,
+        title: title,
+        artist: artist,
         artworkUrl: artworkUrl
       });
       SC.stream('/tracks/' + response['id'], function(sound) {
@@ -330,8 +345,9 @@ var SideNav = React.createClass({
           <div id='pndra-sideNavAlbum'
             className={this.props.audioSrc ? '' : 'album-hidden'}>
             <img src={this.props.artworkUrl}></img>
-            <div>{this.props.title}</div>
-            <div>{this.props.artist}</div>
+            <div className='albumTitle'>{this.props.title}</div>
+            <div className='albumArtist'>{this.props.artist}</div>
+            <hr/>
           </div>
           <span onClick={ this.props.user ? this.logout : this.login}
              id='pndra-logout' className='hvr hvr-blue'>
@@ -666,14 +682,13 @@ var MainView = React.createClass({
             {albums.map(function(album, i) {
               return (
                 <div className={this.props.playlist.index === album.index
-                                ? 'pndra-album hvr hvr-blue selected'
-                                : 'pndra-album hvr hvr-blue'}
+                                ? 'pndra-album hvr hvr-grow selected'
+                                : 'pndra-album hvr hvr-grow'}
                   onClick={this.props.onSelectSong.bind(this, album.index)}>
                   <img src={album.artworkUrl}></img>
-                  <span className='albumText'>
-                    <div className='albumTitle'>{album.title}</div>
-                    <div className='albumArtist'>{album.artist}</div>
-                  </span>
+                  <div className='albumTitle'>{album.title}</div>
+                  <hr/>
+                  <div className='albumArtist'>{album.artist}</div>
                 </div>
               );
             }.bind(this))}
