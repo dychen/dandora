@@ -1,9 +1,9 @@
 import argparse
 import os
 
-from sqlalchemy import create_engine, Column, Integer, String, Unicode, \
+from sqlalchemy import create_engine, Column, Integer, String, Unicode, Float,\
     ForeignKey, UniqueConstraint
-from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 
 # Initialize
@@ -22,6 +22,12 @@ class Song(BASE):
     song_id = Column(String(18), unique=True, index=True)
     title = Column(Unicode(500), index=True)
     artist = Column(Unicode(500))
+    similarities_to = relationship('Similarity',
+                                   foreign_keys='Similarity.song1_id',
+                                   backref='song1', lazy='dynamic')
+    similarities_from = relationship('Similarity',
+                                     foreign_keys='Similarity.song2_id',
+                                     backref='song2', lazy='dynamic')
 
     def __init__(self, song_id=None, title=None, artist=None):
         self.song_id = song_id
@@ -47,12 +53,21 @@ class Playlist(BASE):
     name = Column(Unicode(200))
     __table_args__ = (UniqueConstraint('user_id', 'name'),)
 
+class Similarity(BASE):
+    __tablename__ = 'similarities'
+
+    id = Column(Integer, primary_key=True)
+    song1_id = Column(String(18), ForeignKey('songs.song_id'), nullable=False)
+    song2_id = Column(String(18), ForeignKey('songs.song_id'), nullable=False)
+    similarity = Column(Float, nullable=False)
+    __table_args__ = (UniqueConstraint('song1_id', 'song2_id'),)
+
 def init_db():
     print 'Creating database'
     BASE.metadata.create_all(bind=DB_ENGINE)
 
-def seed_db(path):
-    print 'Seeding database'
+def seed_db_songs(path):
+    print 'Seeding database songs'
     songs = {}
     print '    Reading song file'
     with open(path) as f:
@@ -70,6 +85,20 @@ def seed_db(path):
     print '    Committing to DB'
     DB_SESSION.commit()
 
+def seed_db_similarities(path):
+    print 'Seeding database song similarities'
+    songs = {}
+    print '    Reading similarity file'
+    with open(path) as f:
+        for line in f:
+            song1_id, song2_id, sim = line.strip().split('\t')
+            if sim > 0:
+                DB_SESSION.add(Similarity(
+                    song1_id=song1_id, song2_id=song2_id, similarity=float(sim)
+                ))
+    print '    Committing to DB'
+    DB_SESSION.commit()
+
 def drop_db():
     print 'Dropping database'
     BASE.metadata.drop_all(bind=DB_ENGINE)
@@ -78,8 +107,12 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--init', action='store_const', const=True,
                         help='Initialize database with existing DDL')
-    parser.add_argument('--seed', type=str,
-                        help='Seed database with data at the target file path')
+    parser.add_argument('--seed', action='store_const', const=True,
+                        help='Seed database with existing data')
+    parser.add_argument('--song-file', type=str,
+                        help='Song filepath for seeding the database')
+    parser.add_argument('--similarity-file', type=str,
+                        help='Similarity filepath for seeding the database')
     parser.add_argument('--drop', action='store_const', const=True,
                         help='Drop all tables in existing database')
     args = parser.parse_args()
@@ -88,4 +121,8 @@ if __name__=='__main__':
     if args.init:
         init_db()
     if args.seed:
-        seed_db(args.seed)
+        if args.song_file:
+            seed_db_songs(args.song_file)
+        if args.similarity_file:
+            seed_db_similarities(args.similarity_file)
+

@@ -4,6 +4,7 @@ import requests
 from flask import Flask, jsonify, flash, render_template, session, redirect, url_for, request
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask_s3 import FlaskS3
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from server.database import DB_SESSION, Song, User, Playlist
 from server.oauth import twitter_oauth
@@ -137,6 +138,15 @@ def user():
         return jsonify({ 'username': session['username']})
     return jsonify({ 'username': None })
 
+@app.route('/api/artists')
+def artists():
+    # Result set is a list of tuples [('[Artist]',), ...]
+    artists = [s[0] for s in DB_SESSION.query(Song.artist.distinct())]
+    return jsonify({
+        'length': len(artists),
+        'data': artists
+    })
+
 @app.route('/api/songs')
 def songs():
     # Try quering a Redis cache for better performance
@@ -154,11 +164,36 @@ def songs():
 @app.route('/api/playlists', methods=['GET', 'POST', 'DELETE'])
 def playlist():
     def build_playlist(seed):
-        LIMIT = 100
-
-        songs = list(set([s.artist for s in Song.query.limit(LIMIT).all()]))
-        random.shuffle(songs)
-        return songs
+        LIMIT = 20
+        MIN_SONG_COUNT = 5
+        # Skip the ORM and directly execute the SQL for performance reasons
+        QUERYSTR = text('''
+SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count,
+    scounts.count AS song_count,
+    COUNT(sim.similarity) / CAST(scounts.count AS FLOAT) AS sim_count_norm
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    JOIN (SELECT s.artist AS artist, COUNT(s.id) AS count
+        FROM songs AS s
+        GROUP BY s.artist) AS scounts ON song2.artist=scounts.artist
+    WHERE song1.artist=:artist AND scounts.count > :count
+    GROUP BY song1.artist, song2.artist, scounts.artist, scounts.count
+    ORDER BY sim_count_norm DESC
+    LIMIT :limit;
+        ''')
+        # This *should* be secure since it uses bound parameters which are
+        # passed to the underlying DPAPI:
+        # http://docs.sqlalchemy.org/en/rel_0_9/orm/session_api.html
+        #     #sqlalchemy.orm.session.Session.execute
+        # http://docs.sqlalchemy.org/en/rel_0_9/core/sqlelement.html
+        #     #sqlalchemy.sql.expression.text
+        # http://docs.sqlalchemy.org/en/rel_0_9/core/sqlelement.html
+        #     #sqlalchemy.sql.expression.bindparam
+        params = { 'artist': seed, 'count': MIN_SONG_COUNT, 'limit': LIMIT }
+        # Result tuple: ('artist1', 'artist2', sim_ct, song_ct, norm_sim_ct)
+        results = [row[1] for row in DB_SESSION.execute(QUERYSTR, params)]
+        print 'Query: %s, Results: %s' % (seed, results)
+        return results
 
     def delete_playlist(playlist_name, user_id):
             playlist = (Playlist.query
@@ -239,7 +274,6 @@ def song():
     })
 
 if __name__ == '__main__':
-    # TODO: Remove debug before deployment
     if os.environ['ENVIRONMENT'] == 'development':
         app.run(debug=True)
     else:

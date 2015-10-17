@@ -79,6 +79,123 @@ p=0.5 0.104069
 p=0.0 0.104282
 ```
 
+###Dataset Queries
+```
+# Artists with the most non-zero similarity scores
+SELECT s.artist, COUNT(s.artist) AS count
+    FROM similarities AS sim JOIN songs AS s ON song1_id=s.song_id
+    GROUP BY s.artist
+    ORDER BY count DESC
+    LIMIT 1000;
+
+Coldplay               | 22981
+Florence + The Machine | 15324
+Kings Of Leon          | 14943
+The Black Keys         | 11806
+Jack Johnson           | 11434
+The Killers            | 10619
+Train                  | 10390
+Justin Bieber          | 10258
+Eminem                 |  9604
+Linkin Park            |  9480
+OneRepublic            |  9370
+...
+
+# Artists with the highest total similarity scores
+SELECT s.artist, SUM(similarity) AS sim_total
+    FROM similarities AS sim JOIN songs AS s
+    ON song1_id=s.song_id
+    GROUP BY s.artist
+    ORDER BY sim_total DESC
+    LIMIT 1000;
+
+Big D and The Kids Table | 54.028778
+Jesse Cook               | 49.065007
+Stephy Tang              | 49.008365
+The Sundays              | 47.775178
+Mitch Hedberg            | 45.910202
+Paul Cardall             | 40.820242
+Bosse                    | 40.150111
+Dora The Explorer        |  37.80326
+Ruckus Roboticus         | 37.368392
+Cloud Cult               | 36.716575
+...
+
+# Songs with the most non-zero similarity scores by artist <ARTIST>
+SELECT s.artist, s.title, COUNT(sim.id) AS sim_count
+    FROM songs AS s JOIN similarities AS sim ON s.song_id=sim.song1_id
+    WHERE s.artist='<ARTIST>'
+    GROUP BY s.artist, s.title
+    ORDER BY sim_count DESC;
+
+# The number of non-zero similarity scores for song <SONG> (by artist <ARTIST>)
+SELECT s.title, s.artist, COUNT(sim.id) AS sim_count
+    FROM songs AS s JOIN similarities AS sim ON s.song_id=sim.song1_id
+    WHERE s.title='<SONG>' AND s.artist='<ARTIST>'
+    GROUP BY s.title, s.artist
+    ORDER BY sim_count DESC;
+
+# Songs most similar to song <SONG> (by artist <ARTIST>)
+SELECT song1.title, song1.artist, song2.title, song2.artist, sim.similarity
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    WHERE song1.title='<SONG>' AND song1.artist='<ARTIST>'
+    ORDER BY sim.similarity DESC;
+
+# Songs most similar to songs by the artist <ARTIST>
+SELECT song1.title, song1.artist, song2.title, song2.artist, sim.similarity
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    WHERE song1.artist='<ARTIST>'
+    ORDER BY sim.similarity DESC;
+
+# Artists with songs the most number of songs similar to songs by the artist
+# <ARTIST> (where number of songs is greater than <X>)
+SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    WHERE song1.artist='<ARTIST>'
+    GROUP BY song1.artist, song2.artist
+    ORDER BY sim_count DESC;
+
+# Artists with songs the most number of songs similar to songs by the artist
+# <ARTIST> (normalized by number of songs, where number of songs > <X>)
+SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count,
+    scounts.count AS song_count,
+    COUNT(sim.similarity) / CAST(scounts.count AS FLOAT) AS sim_count_norm
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    JOIN (SELECT s.artist AS artist, COUNT(s.id) AS count
+        FROM songs AS s
+        GROUP BY s.artist) AS scounts ON song2.artist=scounts.artist
+    WHERE song1.artist='<ARTIST>' AND scounts.count > <X>
+    GROUP BY song1.artist, song2.artist, scounts.artist, scounts.count
+    ORDER BY sim_count_norm DESC;
+
+# Artists with songs most similar (total similarity) to songs by the artist
+# <ARTIST>
+SELECT song1.artist, song2.artist, SUM(sim.similarity) AS total_sim
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    WHERE song1.artist='<ARTIST>'
+    GROUP BY song1.artist, song2.artist
+    ORDER BY total_sim DESC;
+
+# Artists with songs most similar (total similarity) to songs by the artist
+# <ARTIST> (normalized by number of songs, where number of songs > <X>)
+SELECT song1.artist, song2.artist, SUM(sim.similarity) AS total_sim,
+    scounts.count AS song_count,
+    SUM(sim.similarity) / CAST(scounts.count AS FLOAT) AS total_sim_norm
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    JOIN (SELECT s.artist AS artist, COUNT(s.id) AS count
+        FROM songs AS s
+        GROUP BY s.artist) AS scounts ON song2.artist=scounts.artist
+    WHERE song1.artist='<ARTIST>' AND scounts.count > <X>
+    GROUP BY song1.artist, song2.artist, scounts.artist, scounts.count
+    ORDER BY total_sim_norm DESC;
+```
+
 ###Dependencies
 ```
 Flask
