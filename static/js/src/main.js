@@ -254,6 +254,7 @@ var MainContainer = React.createClass({
                  onNewSong={this.onNewSong} />
         <MainView playlist={this.getPlaylistByName(this.state.currentPlaylist)}
                   songMetadata={this.state.songMetadata}
+                  audioSrc={this.state.audioSrc}
                   onFindAndPlaySong={this.onFindAndPlaySong}
                   onSelectSong={this.onSelectSong} />
       </div>
@@ -407,13 +408,13 @@ var AudioPlayer = React.createClass({
     this.audioProcNode.setAttribute('id', 'pndra-audioPlayer-proc');
     this.audioProcNode.addEventListener('timeupdate', this.handleTimeUpdate);
     this.audioProcNode.addEventListener('ended', this.props.nextSong);
-
-    this.audio = this.audioProcNode; // Set to processing node by default
     // This allows us to access the audio context of some audio sources (in
     // particular, ones with an open Access-Control-Allow-Origin header - from
     // experience, the ec-media.sndcdn.com CDN but not the cf-media.sndcdn.com
     // CDN.
-    this.audio.crossOrigin = 'anonymous';
+    this.audioProcNode.setAttribute('crossOrigin', 'anonymous');
+
+    this.audio = this.audioProcNode; // Set to processing node by default
 
     // CORS restrictions on AudioContext:
     // http://stackoverflow.com/questions/31895610/
@@ -692,6 +693,9 @@ var MainView = React.createClass({
       var showLeftButton = this.state.scrollIndex >= this.state.maxNumAlbums;
       var showRightButton = this.state.scrollIndex < this.props.playlist.maxIndex;
     }
+    // This is hacky (repeated in AudioPlayer component). Really should
+    // abstract this to parent props.
+    var showGraphs = this.props.audioSrc.indexOf('cf-media.sndcdn.com') < 0;
     return (
       <div id='pndra-mainView'>
         <div id='pndra-albumSelect'>
@@ -730,10 +734,24 @@ var MainView = React.createClass({
           </ReactBootstrap.Button>
         </div>
         <span>
-          <canvas id='pndra-audioCanvasLeft'>
-          </canvas>
-          <canvas id='pndra-audioCanvasRight'>
-          </canvas>
+          <div id='pndra-audioCanvasContainerLeft'>
+            <canvas id='pndra-audioCanvasLeft'
+              style={showGraphs ? {} : { display: 'none' }}>
+            </canvas>
+            <ReactBootstrap.Alert bsStyle='danger'
+              style={!showGraphs ? {} : { display: 'none' }}>
+              Unable to load audio chart.
+            </ReactBootstrap.Alert>
+          </div>
+          <div id='pndra-audioCanvasContainerRight'>
+            <canvas id='pndra-audioCanvasRight'
+              style={showGraphs ? {} : { display: 'none' }}>
+            </canvas>
+            <ReactBootstrap.Alert bsStyle='danger'
+              style={!showGraphs ? {} : { display: 'none' }}>
+              Unable to load audio chart.
+            </ReactBootstrap.Alert>
+          </div>
         </span>
       </div>
     );
