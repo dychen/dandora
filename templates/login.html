@@ -34,7 +34,7 @@
           var params = "query=" + encodeURIComponent(item);
           window.location.href = '/login/auth/null?' + params
         }
-        $.get('/api/songs', function(response) {
+        $.get('/api/artists', function(response) {
           $('#create-station').typeahead({
             source: response.data,
             minLength: 1,

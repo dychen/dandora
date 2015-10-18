@@ -164,7 +164,7 @@ def songs():
 @app.route('/api/playlists', methods=['GET', 'POST', 'DELETE'])
 def playlist():
     def build_playlist(seed):
-        LIMIT = 20
+        LIMIT = 30
         MIN_SONG_COUNT = 5
         # Skip the ORM and directly execute the SQL for performance reasons
         QUERYSTR = text('''
@@ -193,6 +193,7 @@ SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count,
         # Result tuple: ('artist1', 'artist2', sim_ct, song_ct, norm_sim_ct)
         results = [row[1] for row in DB_SESSION.execute(QUERYSTR, params)]
         print 'Query: %s, Results: %s' % (seed, results)
+        random.shuffle(results)
         return results
 
     def delete_playlist(playlist_name, user_id):

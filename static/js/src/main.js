@@ -32,7 +32,8 @@ var MainContainer = React.createClass({
       title: '',
       artist: '',
       artworkUrl: '',
-      audioSrc: ''
+      audioSrc: '',
+      audio: null
     };
   },
   setIntroBlur: function() {
@@ -125,7 +126,7 @@ var MainContainer = React.createClass({
     };
     SPINNER.spin(document.getElementById('pndra-spinner'));
     $.get('/api/song', { query: query }, function(response) {
-      console.log('Response', response);
+      console.log('[Query]', query, '[Response]', response.title, response);
       // DANGER: I think this copies by reference and we're manually mutating
       //         state (outside of this.setState())
       // See: http://stackoverflow.com/questions/518000/
@@ -267,10 +268,10 @@ var SideNav = React.createClass({
       // Sucks that this has to be initialized on the client
       client_id: '65c0de4e700c1180139971b979f997b6'
     });
-    $.get('/api/songs', function(response) {
+    $.get('/api/artists', function(response) {
       /*
        * @response: {
-       *   data: ['Song1', 'Song2', 'Song3', ...]
+       *   data: ['Artist1', 'Artist2', 'Artist3', ...]
        * }
        */
       // Make sure component is mounted. Reference:
@@ -395,15 +396,33 @@ var AudioPlayer = React.createClass({
     };
   },
   componentDidMount: function() {
-    this.audio = document.getElementById('pndra-audio-player');
-    this.audio.addEventListener('timeupdate', this.handleTimeUpdate);
-    this.audio.addEventListener('ended', this.props.nextSong);
+    /* Due to CORS restrictions on AudioContext, create two audio nodes, one as
+     * and AudioContext source node and another as a plain old Audio element */
+    this.audioBaseNode = new Audio;
+    this.audioBaseNode.setAttribute('id', 'pndra-audioPlayer-base');
+    this.audioBaseNode.addEventListener('timeupdate', this.handleTimeUpdate);
+    this.audioBaseNode.addEventListener('ended', this.props.nextSong);
+
+    this.audioProcNode = new Audio;
+    this.audioProcNode.setAttribute('id', 'pndra-audioPlayer-proc');
+    this.audioProcNode.addEventListener('timeupdate', this.handleTimeUpdate);
+    this.audioProcNode.addEventListener('ended', this.props.nextSong);
+
+    this.audio = this.audioProcNode; // Set to processing node by default
+    // This allows us to access the audio context of some audio sources (in
+    // particular, ones with an open Access-Control-Allow-Origin header - from
+    // experience, the ec-media.sndcdn.com CDN but not the cf-media.sndcdn.com
+    // CDN.
     this.audio.crossOrigin = 'anonymous';
+
+    // CORS restrictions on AudioContext:
+    // http://stackoverflow.com/questions/31895610/
+    //   mediaelementaudiosource-outputs-zeroes-due-to-cors-access-restrictions-for
 
     // Hook things up for processing:
     // MediaElementSource -> AudioContext
     this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    this.source = this.audioCtx.createMediaElementSource(this.audio);
+    this.source = this.audioCtx.createMediaElementSource(this.audioProcNode);
     this.source.connect(this.audioCtx.destination);
 
     // Analyze waveform, hook more things up for processing:
@@ -447,8 +466,17 @@ var AudioPlayer = React.createClass({
   },
   componentWillReceiveProps: function(newProps) {
     if (newProps && newProps.audioSrc && newProps.audioSrc != this.props.audioSrc) {
-      this.audio.setAttribute('src', newProps.audioSrc);
-      this.audio.load(); // Reload the source
+      // There should be a better way to do this (ideally, there would be a way
+      // to catch "MediaElementAudioSource outputs zeroes due to CORS access
+      // restrictions for [url]" errors.
+      if (newProps.audioSrc.indexOf('cf-media.sndcdn.com') > -1)
+        this.audio = this.audioBaseNode;
+      else
+        this.audio = this.audioProcNode;
+      this.audioBaseNode.setAttribute('src', newProps.audioSrc);
+      this.audioProcNode.setAttribute('src', newProps.audioSrc);
+      this.audioBaseNode.load();
+      this.audioProcNode.load();
       this.audio.play();
       this.setState({ playing: true });
       this.audioDataHistorical = [];
@@ -579,8 +607,6 @@ var AudioPlayer = React.createClass({
     var playIcon = this.state.playing ? 'pause' : 'play';
     return (
       <div>
-        <audio id='pndra-audio-player'>
-        </audio>
         {this.formatTime(this.state.currentPosition)}
         &nbsp;/&nbsp;{this.formatTime(this.state.duration)}
         <ReactBootstrap.ProgressBar className='pndra-progressBar'
