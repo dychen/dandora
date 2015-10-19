@@ -2,7 +2,7 @@ import argparse
 import os
 
 from sqlalchemy import create_engine, Column, Integer, String, Unicode, Float,\
-    ForeignKey, UniqueConstraint
+    Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -52,6 +52,29 @@ class Playlist(BASE):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     name = Column(Unicode(200))
     __table_args__ = (UniqueConstraint('user_id', 'name'),)
+
+class PlaylistSong(BASE):
+    __tablename__ = 'playlist_songs'
+
+    id = Column(Integer, primary_key=True)
+    playlist_id = Column(Integer, ForeignKey('playlists.id'), nullable=False)
+    soundcloud_song_id = Column(Integer, ForeignKey('soundcloud_songs.id'),
+                                nullable=False)
+    liked = Column(Boolean) # True if liked, False if disliked, None otherwise
+    __table_args__ = (UniqueConstraint('playlist_id', 'soundcloud_song_id'),)
+
+class SoundcloudSong(BASE):
+    __tablename__ = 'soundcloud_songs'
+
+    id = Column(Integer, primary_key=True)
+    query = Column(Unicode(500), nullable=False)
+    url = Column(String(250), nullable=False)
+    title = Column(Unicode(500))
+    user = Column(Unicode(500))
+    artwork_url = Column(String(250))
+    playback_count = Column(Integer)
+    likes_count = Column(Integer)
+    __table_args__ = (UniqueConstraint('query', 'url'),)
 
 class Similarity(BASE):
     __tablename__ = 'similarities'

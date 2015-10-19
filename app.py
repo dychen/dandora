@@ -6,14 +6,45 @@ from flask.ext.sqlalchemy import SQLAlchemy
 from flask_s3 import FlaskS3
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from server.database import DB_SESSION, Song, User, Playlist
+from server.database import DB_SESSION, Song, User, Playlist, SoundcloudSong
 from server.oauth import twitter_oauth
+
+SOUNDCLOUD_URL = 'http://api.soundcloud.com/tracks/'
 
 app = Flask(__name__)
 app.secret_key = os.environ['SECRET_KEY']
 if os.environ['ENVIRONMENT'] == 'production':
     app.config['S3_BUCKET_NAME'] = os.environ['S3_BUCKET_NAME']
     FlaskS3(app)
+
+def update_or_create(model, defaults={}, commit=True, **kwargs):
+    """
+    Equivalent of Django's update_or_create, with an additional option to
+    commit the transaction (commits by default).
+    @param model: Model to update, e.g. Song
+    @param defaults: Parameters to update, e.g. {
+        'playback_count': 1000, 'likes_count': 10
+    }
+    @param commit: Commit the transaction?
+    @param **kwargs: Parameters to check uniqueness on, e.g. {
+        'title': 'How We Do', 'artist': '50 Cent'
+    }
+    """
+    model_instance = DB_SESSION.query(model).filter_by(**kwargs).first()
+    if model_instance:
+        for arg, value in defaults.iteritems():
+            setattr(model_instance, arg, value)
+        if commit:
+            DB_SESSION.commit()
+        return model_instance, True
+    else:
+        params = { k: v for k, v in kwargs.iteritems() }
+        params.update(defaults)
+        model_instance = model(**params)
+        DB_SESSION.add(model_instance)
+        if commit:
+            DB_SESSION.commit()
+        return model_instance, False
 
 def is_logged_in():
     return True if session.get('token') else False
@@ -29,10 +60,91 @@ def create_user(username, token, secret):
     DB_SESSION.commit()
     return new_account
 
+def get_similar_artists(artist, limit=10, min_song_ct=5):
+    """Returns a list of similar artist names to @artist."""
+    # Skip the ORM and directly execute the SQL for performance reasons
+    QUERYSTR = text('''
+SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count,
+    scounts.count AS song_count,
+    COUNT(sim.similarity) / CAST(scounts.count AS FLOAT) AS sim_count_norm
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    JOIN (SELECT s.artist AS artist, COUNT(s.id) AS count
+        FROM songs AS s
+        GROUP BY s.artist) AS scounts ON song2.artist=scounts.artist
+    WHERE song1.artist=:artist AND scounts.count > :count
+    GROUP BY song1.artist, song2.artist, scounts.artist, scounts.count
+    ORDER BY sim_count_norm DESC
+    LIMIT :limit;
+    ''')
+    # This *should* be secure since it uses bound parameters which are
+    # passed to the underlying DPAPI:
+    # http://docs.sqlalchemy.org/en/rel_0_9/orm/session_api.html
+    #     #sqlalchemy.orm.session.Session.execute
+    # http://docs.sqlalchemy.org/en/rel_0_9/core/sqlelement.html
+    #     #sqlalchemy.sql.expression.text
+    # http://docs.sqlalchemy.org/en/rel_0_9/core/sqlelement.html
+    #     #sqlalchemy.sql.expression.bindparam
+    params = { 'artist': artist, 'count': min_song_ct, 'limit': limit }
+    # Result tuple: ('artist1', 'artist2', sim_ct, song_ct, norm_sim_ct)
+    return [row[1] for row in DB_SESSION.execute(QUERYSTR, params)]
+
+def get_similar_songs(artist, limit=10):
+    """Returns a list of similar (song, artist) tuples to @artist."""
+    QUERYSTR = text('''
+SELECT song1.artist, song2.title, song2.artist, SUM(sim.similarity) AS total_sim
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    WHERE song1.artist=:artist
+    GROUP BY song1.artist, song2.title, song2.artist
+    ORDER BY total_sim DESC
+    LIMIT :limit;
+    ''')
+    params = { 'artist': artist, 'limit': limit }
+    # Result tuple: ('artist1', 'song2', 'artist2', sim)
+    return ['%s %s' % (row[1], row[2])
+            for row in DB_SESSION.execute(QUERYSTR, params)]
+
+def populate_soundcloud_songs(query):
+    """
+    For response format, check:
+    https://developers.soundcloud.com/docs/api/reference#tracks
+    The response will be a list of the example response dicts.
+    """
+
+    PLAYBACK_FLOOR = 100000
+    LIKES_FLOOR = 200
+
+    def soundcloud_song_filter(song_metadata):
+        return (song_metadata['streamable']
+                and song_metadata['playback_count'] > PLAYBACK_FLOOR
+                and song_metadata['likes_count'] > LIKES_FLOOR)
+
+    response = requests.get(SOUNDCLOUD_URL, params={
+        'q': query,
+        'client_id': os.environ['SOUNDCLOUD_CLIENT_ID'],
+        'limit': 100
+    })
+    data = response.json()
+    filtered = [d for d in data if d['streamable']]
+    for d in filtered:
+        update_or_create(SoundcloudSong, query=query, url=d['stream_url'],
+                         defaults={
+                             'title': d['title'],
+                             'user': d['user']['username'],
+                             'artwork_url': d['artwork_url'],
+                             'playback_count': d['playback_count'],
+                             'likes_count': d['likes_count']
+                        })
+    print 'Updated songs for query %s' % query
+
 def create_playlist(playlist_name, user_id):
+    print 'Creating new playlist %s for user %s' % (playlist_name, user_id)
     new_playlist = Playlist(user_id=user_id, name=playlist_name)
     DB_SESSION.add(new_playlist)
     DB_SESSION.commit()
+    # Seed soundcloud_songs database table
+    map(populate_soundcloud_songs, get_similar_artists(playlist_name))
     return new_playlist
 
 @app.teardown_appcontext
@@ -81,7 +193,7 @@ def auth():
 @app.route('/login/auth/null')
 def fake_auth():
     def generate_username():
-        return 'Guest-%d' % random.randint(0, 1000000)
+        return 'Guest-%d' % random.randint(0, 1000000000000)
     def generate_fake_token():
         token = os.urandom(20).encode('hex')[:39]
         return '0000000000-%s' % token
@@ -140,31 +252,26 @@ def user():
 
 @app.route('/api/artists')
 def artists():
+    def artist_filter(artist_str):
+        stop_words = ['ft.', 'feat', 'featuring', '_', '+', '/', '|']
+        artist_str = artist_str.lower()
+        for stop_word in stop_words:
+            if stop_word in artist_str:
+                return False
+        return True
+
     # Result set is a list of tuples [('[Artist]',), ...]
-    artists = [s[0] for s in DB_SESSION.query(Song.artist.distinct())]
+    artists = [s[0] for s in DB_SESSION.query(Song.artist.distinct())
+               if artist_filter(s[0])]
     return jsonify({
         'length': len(artists),
         'data': artists
     })
 
-@app.route('/api/songs')
-def songs():
-    # Try quering a Redis cache for better performance
-    LIMIT = 50000
-    import time
-    start = time.time()
-    songs = ['%s - %s' % (s.artist, s.title)
-             for s in Song.query.limit(LIMIT).all()]
-    print 'Queried songs in %.10fs' % (time.time() - start)
-    return jsonify({
-        'length': len(songs),
-        'data': songs
-    })
-
 @app.route('/api/playlists', methods=['GET', 'POST', 'DELETE'])
 def playlist():
     def build_playlist(seed):
-        LIMIT = 30
+        LIMIT = 100
         MIN_SONG_COUNT = 5
         # Skip the ORM and directly execute the SQL for performance reasons
         QUERYSTR = text('''
@@ -181,6 +288,17 @@ SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count,
     ORDER BY sim_count_norm DESC
     LIMIT :limit;
         ''')
+        """
+        QUERYSTR = text('''
+SELECT song1.artist, song2.title, song2.artist, SUM(sim.similarity) AS total_sim
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    WHERE song1.artist=:artist
+    GROUP BY song1.artist, song2.title, song2.artist
+    ORDER BY total_sim DESC
+    LIMIT :limit;
+        ''')
+        """
         # This *should* be secure since it uses bound parameters which are
         # passed to the underlying DPAPI:
         # http://docs.sqlalchemy.org/en/rel_0_9/orm/session_api.html
@@ -192,7 +310,11 @@ SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count,
         params = { 'artist': seed, 'count': MIN_SONG_COUNT, 'limit': LIMIT }
         # Result tuple: ('artist1', 'artist2', sim_ct, song_ct, norm_sim_ct)
         results = [row[1] for row in DB_SESSION.execute(QUERYSTR, params)]
+        # Result tuple: ('artist1', 'song2', 'artist2', sim)
+        # results = ['%s %s' % (row[1], row[2])
+        #           for row in DB_SESSION.execute(QUERYSTR, params)]
         print 'Query: %s, Results: %s' % (seed, results)
+        populate_soundcloud_songs(results[0])
         random.shuffle(results)
         return results
 
@@ -245,13 +367,7 @@ SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count,
 
 @app.route('/api/song')
 def song():
-    """
-    For response format, check:
-    https://developers.soundcloud.com/docs/api/reference#tracks
-    The response will be a list of the example response dicts.
-    """
 
-    SOUNDCLOUD_URL = 'http://api.soundcloud.com/tracks/'
     print 'Querying songs'
     query = request.args.get('query')
     response = requests.get(SOUNDCLOUD_URL, params={

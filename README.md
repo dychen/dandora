@@ -142,12 +142,20 @@ SELECT song1.title, song1.artist, song2.title, song2.artist, sim.similarity
     WHERE song1.title='<SONG>' AND song1.artist='<ARTIST>'
     ORDER BY sim.similarity DESC;
 
-# Songs most similar to songs by the artist <ARTIST>
+# Songs most similar to SINGLE songs by the artist <ARTIST>
 SELECT song1.title, song1.artist, song2.title, song2.artist, sim.similarity
     FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
     JOIN songs AS song2 ON sim.song2_id=song2.song_id
     WHERE song1.artist='<ARTIST>'
     ORDER BY sim.similarity DESC;
+
+# Songs most similar to ALL songs by the artist <ARTIST>
+SELECT song1.artist, song2.title, song2.artist, SUM(sim.similarity) AS total_sim
+    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
+    JOIN songs AS song2 ON sim.song2_id=song2.song_id
+    WHERE song1.artist='<ARTIST>'
+    GROUP BY song1.artist, song2.title, song2.artist
+    ORDER BY total_sim DESC;
 
 # Artists with songs the most number of songs similar to songs by the artist
 # <ARTIST> (where number of songs is greater than <X>)
