@@ -11,23 +11,19 @@ var MainContainer = React.createClass({
       currentPlaylist: '',
       /* Format: {
        *   name: [str], // Playlist name
-       *   songs: [list] // List of songs titles to query on
+       *   songs: [list] // List of song metadata to query on:
+       *   {
+       *     id: [int],
+       *     url: [str],
+       *     title: [str],
+       *     artist: [str],
+       *     artworkUrl: [str]
+       *   }
        *   index: [int] // Index of the currently playing song
        *   maxIndex: [int] // Index of the lastest song played
        * }
        */
       playlists: [],
-      /*
-       * Format: {
-       *   [song query]: {
-       *     title: [str],
-       *     artist: [str],
-       *     artworkUrl: [str]
-       *   },
-       *   ...
-       * }
-       */
-      songMetadata: {},
       user: '',
       title: '',
       artist: '',
@@ -57,6 +53,31 @@ var MainContainer = React.createClass({
         $(jqQueries[i]).removeClass('pndra-blur');
     }
   },
+  formatPlaylistResponse: function(playlistResponse) {
+    var clipText = function(text, maxLen) {
+      if (text.length < maxLen)
+        return text;
+      var textArr = text.split(' ');
+      var joined = '';
+      for (var i = 0; i < textArr.length; i++) {
+        joined = textArr.slice(0, i+1).join(' ');
+        if (joined.length > maxLen - 3)
+          return textArr.slice(0, i).join(' ') + '...';
+      }
+      return text;
+    };
+
+    return playlistResponse.map(function(data) {
+      return {
+        id: data.sc_id,
+        url: data.url,
+        title: clipText(data.title, 50),
+        artist: clipText(data.user, 25),
+        artworkUrl: (data.artwork_url ? data.artwork_url
+          : BUCKET_URL + 'assets/no-album.png')
+      };
+    });
+  },
   componentDidMount: function() {
     SPINNER.spin(document.getElementById('pndra-spinner'));
     $.get('/api/user', function(response) {
@@ -65,9 +86,20 @@ var MainContainer = React.createClass({
 
     var response = $.get('/api/playlists', function(response) {
       if (response.data.length > 0) {
-        this.setState({ playlists: response.data }, function() {
+        var formattedData = [];
+        for (var i = 0; i < response.data.length; i++) {
+          var formattedSongs = this.formatPlaylistResponse(response.data[i].songs);
+          formattedData = formattedData.concat({
+            name: response.data[i].name,
+            songs: formattedSongs,
+            index: 0,
+            maxIndex: 0
+          });
+        }
+
+        this.setState({ playlists: formattedData }, function() {
           /* If there's at least one playlist, auto-play from the first one */
-          var playlistName = response.data[0].name;
+          var playlistName = formattedData[0].name;
           this.onSwitchPlaylist(playlistName, this.onFindAndPlaySong)
           SPINNER.stop();
         });
@@ -111,51 +143,26 @@ var MainContainer = React.createClass({
       this.setState({ currentPlaylist: query });
     }
   },
-  onFindAndPlaySong: function(query) {
-    var clipText = function(text, maxLen) {
-      if (text.length < maxLen)
-        return text;
-      var textArr = text.split(' ');
-      var joined = '';
-      for (var i = 0; i < textArr.length; i++) {
-        joined = textArr.slice(0, i+1).join(' ');
-        if (joined.length > maxLen - 3)
-          return textArr.slice(0, i).join(' ') + '...';
-      }
-      return text;
-    };
+  onFindAndPlaySong: function(song) {
+    /*
+     * @song: {
+     *   id: [int],
+     *   url: [str],
+     *   title: [str],
+     *   artist: [str],
+     *   artworkUrl: [str]
+     * }
+     */
     SPINNER.spin(document.getElementById('pndra-spinner'));
-    $.get('/api/song', { query: query }, function(response) {
-      console.log('[Query]', query, '[Response]', response.title, response);
-      // DANGER: I think this copies by reference and we're manually mutating
-      //         state (outside of this.setState())
-      // See: http://stackoverflow.com/questions/518000/
-      //        is-javascript-a-pass-by-reference-or-pass-by-value-language
-      var newSongMetadata = this.state.songMetadata;
-      var artworkUrl = (response.artwork_url
-        ? response.artwork_url : BUCKET_URL + 'assets/no-album.png');
-      // Clip title and artist strings based on length
-      var title = clipText(response.title, 50);
-      var artist = clipText(response.user, 25);
-      newSongMetadata[query] = {
-        title: title,
-        artist: artist,
-        artworkUrl: artworkUrl
-      }
-      this.setState({
-        songMetadata: newSongMetadata,
-        title: title,
-        artist: artist,
-        artworkUrl: artworkUrl
-      });
-      SC.stream('/tracks/' + response['id'], function(sound) {
-        this.setState({ audioSrc: sound._player._descriptor.src });
-        SPINNER.stop();
-      }.bind(this));
-    }.bind(this)).fail(function(jqXHR, textStatus, error) {
-      // Couldn't find a song. Remove query from playlist and try the next
-      // one.
+    this.setState({
+      title: song.title,
+      artist: song.artist,
+      artworkUrl: song.artworkUrl
     });
+    SC.stream('/tracks/' + song.id, function(sound) {
+      this.setState({ audioSrc: sound._player._descriptor.src });
+      SPINNER.stop();
+    }.bind(this));
   },
   onSwitchPlaylist: function(playlistName, callback) {
     this.setState({
@@ -166,12 +173,14 @@ var MainContainer = React.createClass({
     });
   },
   onDeletePlaylist: function(playlistName) {
+    SPINNER.spin(document.getElementById('pndra-spinner'));
     var request = $.ajax({
       url:'/api/playlists',
       method: 'DELETE',
       data: { name: playlistName }
     });
     request.done(function() {
+      SPINNER.stop();
       // React immutability helpers documentation:
       // https://facebook.github.io/react/docs/update.html
       var playlistIndex = this.getPlaylistIndexByName(playlistName);
@@ -246,6 +255,7 @@ var MainContainer = React.createClass({
                  artist={this.state.artist}
                  artworkUrl={this.state.artworkUrl}
                  audioSrc={this.state.audioSrc}
+                 formatPlaylistResponse={this.formatPlaylistResponse}
                  onSearchStation={this.onSearchStation}
                  onFindAndPlaySong={this.onFindAndPlaySong}
                  onSwitchPlaylist={this.onSwitchPlaylist}
@@ -253,7 +263,6 @@ var MainContainer = React.createClass({
                  onNextSong={this.onNextSong}
                  onNewSong={this.onNewSong} />
         <MainView playlist={this.getPlaylistByName(this.state.currentPlaylist)}
-                  songMetadata={this.state.songMetadata}
                   audioSrc={this.state.audioSrc}
                   onFindAndPlaySong={this.onFindAndPlaySong}
                   onSelectSong={this.onSelectSong} />
@@ -288,9 +297,12 @@ var SideNav = React.createClass({
     }.bind(this));
   },
   searchStation: function(item) {
+    SPINNER.spin(document.getElementById('pndra-spinner'));
     $.post('/api/playlists', { query: item }, function(response) {
-      var songName = this.props.onSearchStation(item, response.data);
-      this.props.onFindAndPlaySong(response.data[0]);
+      SPINNER.stop();
+      var formattedResponse = this.props.formatPlaylistResponse(response.data);
+      this.props.onSearchStation(item, formattedResponse);
+      this.props.onFindAndPlaySong(formattedResponse[0]);
       $('#create-station-typeahead').text('');
     }.bind(this)).fail(function(jqXHR, textStatus, error) {
       if (jqXHR.status === 409) {
@@ -411,7 +423,7 @@ var AudioPlayer = React.createClass({
     // This allows us to access the audio context of some audio sources (in
     // particular, ones with an open Access-Control-Allow-Origin header - from
     // experience, the ec-media.sndcdn.com CDN but not the cf-media.sndcdn.com
-    // CDN.
+    // CDN or ec-rtmp-media.soundcloud.com CDNs
     this.audioProcNode.setAttribute('crossOrigin', 'anonymous');
 
     this.audio = this.audioProcNode; // Set to processing node by default
@@ -470,10 +482,10 @@ var AudioPlayer = React.createClass({
       // There should be a better way to do this (ideally, there would be a way
       // to catch "MediaElementAudioSource outputs zeroes due to CORS access
       // restrictions for [url]" errors.
-      if (newProps.audioSrc.indexOf('cf-media.sndcdn.com') > -1)
-        this.audio = this.audioBaseNode;
-      else
+      if (newProps.audioSrc.indexOf('ec-media.sndcdn.com') > -1)
         this.audio = this.audioProcNode;
+      else
+        this.audio = this.audioBaseNode;
       this.audioBaseNode.setAttribute('src', newProps.audioSrc);
       this.audioProcNode.setAttribute('src', newProps.audioSrc);
       this.audioBaseNode.load();
@@ -679,15 +691,17 @@ var MainView = React.createClass({
     if (this.props.playlist) {
       var index = this.state.scrollIndex;
       var albumLength = Math.min(this.state.maxNumAlbums, index + 1);
-      var songName;
-      var album;
+      var song;
+      var artworkUrl;
       for (var i = 0; i < albumLength; i++) {
-        songName = this.props.playlist.songs[(index+1) - albumLength + i];
-        if (songName in this.props.songMetadata) {
-          album = this.props.songMetadata[songName];
-          album.index = (index+1) - albumLength + i;
-          albums.push(album);
-        }
+        song = this.props.playlist.songs[(index+1) - albumLength + i];
+        var album = {
+          title: song.title,
+          artist: song.artist,
+          artworkUrl: song.artworkUrl,
+          index: (index+1) - albumLength + i
+        };
+        albums.push(album);
       }
 
       var showLeftButton = this.state.scrollIndex >= this.state.maxNumAlbums;
@@ -695,7 +709,7 @@ var MainView = React.createClass({
     }
     // This is hacky (repeated in AudioPlayer component). Really should
     // abstract this to parent props.
-    var showGraphs = this.props.audioSrc.indexOf('cf-media.sndcdn.com') < 0;
+    var showGraphs = this.props.audioSrc.indexOf('ec-media.sndcdn.com') > -1;
     return (
       <div id='pndra-mainView'>
         <div id='pndra-albumSelect'>

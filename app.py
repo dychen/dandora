@@ -1,3 +1,4 @@
+import math
 import os
 import random
 import requests
@@ -60,7 +61,7 @@ def create_user(username, token, secret):
     DB_SESSION.commit()
     return new_account
 
-def get_similar_artists(artist, limit=10, min_song_ct=5):
+def get_similar_artists(artist, limit=10, min_song_ct=5, artist_first=True):
     """Returns a list of similar artist names to @artist."""
     # Skip the ORM and directly execute the SQL for performance reasons
     QUERYSTR = text('''
@@ -87,7 +88,13 @@ SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count,
     #     #sqlalchemy.sql.expression.bindparam
     params = { 'artist': artist, 'count': min_song_ct, 'limit': limit }
     # Result tuple: ('artist1', 'artist2', sim_ct, song_ct, norm_sim_ct)
-    return [row[1] for row in DB_SESSION.execute(QUERYSTR, params)]
+    artists = [row[1] for row in DB_SESSION.execute(QUERYSTR, params)]
+    if artist_first:
+        if artist in artists:
+            artists.remove(artist)
+        return [artist] + artists
+    else:
+        return artists
 
 def get_similar_songs(artist, limit=10):
     """Returns a list of similar (song, artist) tuples to @artist."""
@@ -112,8 +119,8 @@ def populate_soundcloud_songs(query):
     The response will be a list of the example response dicts.
     """
 
-    PLAYBACK_FLOOR = 100000
-    LIKES_FLOOR = 200
+    PLAYBACK_FLOOR = 200000
+    LIKES_FLOOR = 500
 
     def soundcloud_song_filter(song_metadata):
         return (song_metadata['streamable']
@@ -128,8 +135,9 @@ def populate_soundcloud_songs(query):
     data = response.json()
     filtered = [d for d in data if d['streamable']]
     for d in filtered:
-        update_or_create(SoundcloudSong, query=query, url=d['stream_url'],
+        update_or_create(SoundcloudSong, search=query, sc_id=d['id'],
                          defaults={
+                             'url': d['stream_url'],
                              'title': d['title'],
                              'user': d['user']['username'],
                              'artwork_url': d['artwork_url'],
@@ -270,53 +278,23 @@ def artists():
 
 @app.route('/api/playlists', methods=['GET', 'POST', 'DELETE'])
 def playlist():
-    def build_playlist(seed):
-        LIMIT = 100
-        MIN_SONG_COUNT = 5
-        # Skip the ORM and directly execute the SQL for performance reasons
-        QUERYSTR = text('''
-SELECT song1.artist, song2.artist, COUNT(sim.similarity) AS sim_count,
-    scounts.count AS song_count,
-    COUNT(sim.similarity) / CAST(scounts.count AS FLOAT) AS sim_count_norm
-    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
-    JOIN songs AS song2 ON sim.song2_id=song2.song_id
-    JOIN (SELECT s.artist AS artist, COUNT(s.id) AS count
-        FROM songs AS s
-        GROUP BY s.artist) AS scounts ON song2.artist=scounts.artist
-    WHERE song1.artist=:artist AND scounts.count > :count
-    GROUP BY song1.artist, song2.artist, scounts.artist, scounts.count
-    ORDER BY sim_count_norm DESC
-    LIMIT :limit;
-        ''')
-        """
-        QUERYSTR = text('''
-SELECT song1.artist, song2.title, song2.artist, SUM(sim.similarity) AS total_sim
-    FROM songs AS song1 JOIN similarities AS sim ON song1.song_id=sim.song1_id
-    JOIN songs AS song2 ON sim.song2_id=song2.song_id
-    WHERE song1.artist=:artist
-    GROUP BY song1.artist, song2.title, song2.artist
-    ORDER BY total_sim DESC
-    LIMIT :limit;
-        ''')
-        """
-        # This *should* be secure since it uses bound parameters which are
-        # passed to the underlying DPAPI:
-        # http://docs.sqlalchemy.org/en/rel_0_9/orm/session_api.html
-        #     #sqlalchemy.orm.session.Session.execute
-        # http://docs.sqlalchemy.org/en/rel_0_9/core/sqlelement.html
-        #     #sqlalchemy.sql.expression.text
-        # http://docs.sqlalchemy.org/en/rel_0_9/core/sqlelement.html
-        #     #sqlalchemy.sql.expression.bindparam
-        params = { 'artist': seed, 'count': MIN_SONG_COUNT, 'limit': LIMIT }
-        # Result tuple: ('artist1', 'artist2', sim_ct, song_ct, norm_sim_ct)
-        results = [row[1] for row in DB_SESSION.execute(QUERYSTR, params)]
-        # Result tuple: ('artist1', 'song2', 'artist2', sim)
-        # results = ['%s %s' % (row[1], row[2])
-        #           for row in DB_SESSION.execute(QUERYSTR, params)]
-        print 'Query: %s, Results: %s' % (seed, results)
-        populate_soundcloud_songs(results[0])
-        random.shuffle(results)
-        return results
+    def build_playlist(seed, length=100):
+        similar_artists = get_similar_artists(seed)
+        soundcloud_songs = []
+        for i, artist in enumerate(similar_artists):
+            soundcloud_songs += (SoundcloudSong.query
+                                               .filter_by(search=seed)
+                                               .limit((10-i) * 10)
+                                               .all())
+        # Weighted shuffle
+        soundcloud_songs.sort(key=lambda song:
+                              math.log(song.playback_count) * random.random())
+        playlist_songs = [{ k: getattr(song, k)
+            for k in ('sc_id', 'url', 'title', 'user', 'artwork_url') }
+            for song in soundcloud_songs
+        ][:length]
+        random.shuffle(playlist_songs)
+        return playlist_songs
 
     def delete_playlist(playlist_name, user_id):
             playlist = (Playlist.query
@@ -334,9 +312,9 @@ SELECT song1.artist, song2.title, song2.artist, SUM(sim.similarity) AS total_sim
     if request.method == 'POST':
         seed = request.form.get('query')
 
-        songs = build_playlist(seed)
         try:
             create_playlist(seed, user.id)
+            songs = build_playlist(seed)
             response = jsonify({ 'length': len(songs), 'data': songs })
             response.status_code = 201
             return response
@@ -354,9 +332,7 @@ SELECT song1.artist, song2.title, song2.artist, SUM(sim.similarity) AS total_sim
         playlists = [
             {
                 'name': playlist.name,
-                'songs': build_playlist(playlist.name),
-                'index': 0,
-                'maxIndex': 0
+                'songs': build_playlist(playlist.name)
             }
             for playlist in Playlist.query.filter_by(user_id=user.id).all()
         ]

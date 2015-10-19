@@ -67,14 +67,15 @@ class SoundcloudSong(BASE):
     __tablename__ = 'soundcloud_songs'
 
     id = Column(Integer, primary_key=True)
-    query = Column(Unicode(500), nullable=False)
+    search = Column(Unicode(500), nullable=False)
+    sc_id = Column(Integer, nullable=False)
     url = Column(String(250), nullable=False)
     title = Column(Unicode(500))
     user = Column(Unicode(500))
     artwork_url = Column(String(250))
     playback_count = Column(Integer)
     likes_count = Column(Integer)
-    __table_args__ = (UniqueConstraint('query', 'url'),)
+    __table_args__ = (UniqueConstraint('search', 'sc_id'),)
 
 class Similarity(BASE):
     __tablename__ = 'similarities'
